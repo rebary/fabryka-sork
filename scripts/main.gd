@@ -33,6 +33,7 @@ const INTROS := {
 	"limit": ["Nowość: limit ruchów", "Zlecenie trzeba wykonać w podanej liczbie ruchów.\nCofnięcie zwraca ruch, więc zawsze możesz spróbować inaczej."],
 	"cap5": ["Nowość: palety na 5", "Na tych paletach mieści się 5 paczek.\nPaleta jest gotowa, gdy ma 5 paczek tego samego produktu."],
 	"chwytaki": ["Nowość: wymiana chwytaków", "Próżnia bierze cały ciąg paczek – ale tylko, gdy zmieści się w całości.\nWidły biorą do 2 paczek, szczęki 1.\nZmiana chwytaka kosztuje jeden ruch."],
+	"upadki": ["Nowość: śliskie paczki", "Czasem paczka wyślizgnie się z chwytaka i spadnie z powrotem na paletę.\nTaki ruch przepada – nie da się go cofnąć."],
 	"program": ["Programowanie robota", "Ułóż program: dotknij palety źródłowej, potem docelowej – to jeden krok.\nPodczas programowania robot stoi, więc przewiduj skutki kroków w głowie.\nSTART uruchamia program. Błędny krok zatrzymuje robota."],
 }
 const TOOL_NAMES := {-1: "próżnię", 2: "widły", 1: "szczęki"}
@@ -59,6 +60,7 @@ var params := {}
 var move_limit := 0
 var par := 0
 var history: Array = []
+var dropped_moves := 0  # ruchy stracone przez upuszczenie paczki (nie da się ich cofnąć)
 var found_hint_this_level := false
 var max_progress := 0
 
@@ -84,10 +86,31 @@ var rail_y := 196.0
 var box_styles := {}
 
 
+var post: CanvasLayer
+
+
 func _ready() -> void:
 	randomize()
+	Look.init()
+	# Efekty całego obrazu (shader) - warstwa nad grą, pod interfejsem.
+	post = CanvasLayer.new()
+	post.layer = 1
+	var pr := ColorRect.new()
+	pr.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	pr.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://assets/shaders/post.gdshader")
+	pr.material = mat
+	post.add_child(pr)
+	post.visible = Save.fx_on
+	add_child(post)
 	hud = preload("res://scripts/hud.gd").new()
+	hud.layer = 2
 	add_child(hud)
+	hud.fx_toggled.connect(func():
+		Save.fx_on = not Save.fx_on
+		Save.save()
+		post.visible = Save.fx_on)
 	fx = preload("res://scripts/fx.gd").new()
 	add_child(fx)
 	hud.undo_pressed.connect(_on_undo)
@@ -205,6 +228,7 @@ func _apply_level(g: Dictionary) -> void:
 	found_hint_this_level = false
 	max_progress = 0
 	_reset_state()
+	hud.transition()
 	var intro: String = params["intro"]
 	if intro != "" and not Save.seen_intros.has(intro):
 		Save.seen_intros.append(intro)
@@ -223,6 +247,7 @@ func _apply_program(g: Dictionary) -> void:
 	prog_index = -1
 	prog_error = -1
 	_reset_state()
+	hud.transition()
 
 
 func _restart_level() -> void:
@@ -234,6 +259,7 @@ func _restart_level() -> void:
 
 func _reset_state() -> void:
 	history.clear()
+	dropped_moves = 0
 	selected = -1
 	anim = {}
 	hint = {}
@@ -246,8 +272,12 @@ func _reset_state() -> void:
 	queue_redraw()
 
 
+func _moves_used() -> int:
+	return history.size() + dropped_moves
+
+
 func _limit_left() -> int:
-	return move_limit - history.size() if move_limit > 0 else 9999
+	return move_limit - _moves_used() if move_limit > 0 else 9999
 
 
 # ---------------------------------------------------------------- ruchy (wspólne)
@@ -256,6 +286,9 @@ func _try_move(from: int, to: int) -> bool:
 	var n := board.move_count(from, to)
 	if n == 0:
 		return false
+	if mode == "campaign" and params.get("mods", []).has(LevelGenerator.MOD_DROP) and randf() < LevelGenerator.DROP_CHANCE:
+		_drop_move(from, n)
+		return true
 	var src_size: int = board.stacks[from].size()
 	var dst_size: int = board.stacks[to].size()
 	var items: Array = board.stacks[from].slice(src_size - n)
@@ -276,7 +309,27 @@ func _try_move(from: int, to: int) -> bool:
 	return true
 
 
+## Paczka wyślizguje się z chwytaka: robot ją podnosi, a ona spada z powrotem na paletę.
+## Ruch jest liczony, plansza się nie zmienia, cofnięcie nie zwraca ruchu.
+func _drop_move(from: int, n: int) -> void:
+	var size: int = board.stacks[from].size()
+	var items: Array = board.stacks[from].slice(size - n)
+	var src_top := _box_rect(from, size - 1).position
+	dropped_moves += 1
+	var travel := absf(src_top.x + box_size.x / 2.0 - gripper_x) / TRAVEL_SPEED + 0.05
+	anim = {"from": from, "to": from, "n": n, "items": items, "reveals": [], "s": src_top, "d": src_top,
+		"gx0": gripper_x, "travel": travel, "e": 0.0, "picked": false, "dropped": false,
+		"revealed": true, "lucky": false, "drop": true, "slipped": false}
+	_update_hud()
+
+
 func _on_anim_event(u: float) -> void:
+	if anim.get("drop", false) and not anim["slipped"] and u >= 0.45:
+		anim["slipped"] = true
+		Sfx.play("error")
+		var p: Vector2 = anim["s"] + Vector2(box_size.x / 2.0, -10)
+		fx.float_text("Wyślizgnęła się! −1 ruch", p, Color("#ff6b6b"))
+		fx.burst(p + Vector2(0, 30), Color("#ff9a36"), 16)
 	if not anim["picked"] and u >= 0.15:
 		anim["picked"] = true
 		Sfx.play("pick", randf_range(0.95, 1.05))
@@ -315,7 +368,7 @@ func _after_move(to: int) -> void:
 
 
 func _on_level_complete() -> void:
-	var moves := history.size()
+	var moves := _moves_used()
 	var stars := LevelGenerator.stars_for(moves, par)
 	var new_stars: int = Save.record_stars(false, level, stars)
 	var bonus: int = Save.wallet.on_level_completed()
@@ -555,7 +608,7 @@ func _undos_needed() -> int:
 	var b := board.clone()
 	for k in history.size():
 		b.undo(history[history.size() - 1 - k])
-		var used := history.size() - k - 1
+		var used := _moves_used() - k - 1
 		var depth := move_limit - used if move_limit > 0 else -1
 		if Solver.solve(b, 15000, depth).ok:
 			return k + 1
@@ -642,7 +695,7 @@ func _update_hud() -> void:
 		hud.set_program_status(prog["number"], program, prog["max_steps"], prog["optimal"],
 			prog_index if prog_state == "run" else -1, prog_error, prog_state, Save.wallet.hints)
 	else:
-		hud.set_status(level, history.size(), move_limit, params.get("mods", []), Save.wallet.hints)
+		hud.set_status(level, _moves_used(), move_limit, params.get("mods", []), Save.wallet.hints)
 		hud.set_tools(board.tools, board.tool_cap)
 
 
@@ -837,6 +890,7 @@ func _draw_hall(vs: Vector2) -> void:
 	else:
 		for x in range(60, int(vs.x), 120):
 			draw_line(Vector2(x, 0), Vector2(x, floor_y), Color(1, 1, 1, 0.025), 2)
+	_draw_backdrop(vs, floor_y)
 	_draw_lights(vs)
 	_draw_sign(vs)
 	# Posadzka.
@@ -867,6 +921,35 @@ func _draw_hall(vs: Vector2) -> void:
 	draw_rect(Rect2(0, rail_y + 6, vs.x, 4), COL_STEEL_DARK)
 	for x in range(0, int(vs.x), 36):
 		draw_line(Vector2(x, rail_y - 10), Vector2(x + 18, rail_y + 6), COL_STEEL, 3)
+
+
+## Głębia hali: świetliki z promieniami światła, regały w oddali i unoszący się kurz.
+func _draw_backdrop(vs: Vector2, floor_y: float) -> void:
+	# Świetliki pod dachem i promienie światła.
+	for k in 3:
+		var x := vs.x * (0.2 + 0.3 * k)
+		draw_rect(Rect2(x - 40, 2, 80, 26), Color(0.55, 0.7, 0.85, 0.22))
+		draw_rect(Rect2(x - 40, 2, 80, 26), Color(0.7, 0.8, 0.9, 0.25), false, 2.0)
+		draw_line(Vector2(x, 2), Vector2(x, 28), Color(0, 0, 0, 0.3), 2)
+		draw_colored_polygon(PackedVector2Array([Vector2(x - 40, 28), Vector2(x + 40, 28), Vector2(x + 170, floor_y), Vector2(x + 30, floor_y)]),
+			Color(0.75, 0.85, 1.0, 0.035))
+	# Regały w oddali (sylwetki z kartonami).
+	var far := Color(0, 0, 0, 0.16)
+	var y_top := floor_y - 300.0
+	for x in range(-30, int(vs.x) + 60, 150):
+		draw_rect(Rect2(x, y_top, 6, 300), far)
+		draw_rect(Rect2(x + 120, y_top, 6, 300), far)
+		for shelf in 4:
+			var sy := y_top + 40 + shelf * 72
+			draw_rect(Rect2(x, sy, 126, 5), far)
+			for b in 3:
+				var h := 26.0 + float((x * 7 + shelf * 13 + b * 5) % 18)
+				draw_rect(Rect2(x + 10 + b * 38, sy - h, 32, h), Color(0, 0, 0, 0.10))
+	# Kurz w świetle.
+	for i in 36:
+		var fx_ := fmod(i * 97.3 + sin(time * 0.3 + i) * 18.0, vs.x)
+		var fy := fmod(i * 53.1 + time * (6.0 + float(i % 5) * 2.0), floor_y)
+		draw_circle(Vector2(fx_, fy), 1.2 + float(i % 3) * 0.6, Color(1, 1, 0.9, 0.10 + 0.05 * sin(time + i)))
 
 
 func _draw_lights(vs: Vector2) -> void:
@@ -961,11 +1044,13 @@ func _draw_stack(i: int) -> void:
 	var base := r.position + Vector2(sx, 0)
 	var slot := Rect2(base, Vector2(r.size.x, r.size.y - pallet_h))
 	draw_rect(slot, Color(COL_DONE, 0.10) if complete else Color(1, 1, 1, 0.035))
-	for px in [base.x - 8, base.x + r.size.x + 2]:
-		draw_rect(Rect2(px, base.y - 14, 6, r.size.y + 14), COL_STEEL)
+	for px in [base.x - 9, base.x + r.size.x + 2]:
+		_grad_h(Rect2(px, base.y - 14, 7, r.size.y + 14), Color("#3a414b"), Color("#8d98a6"), Color("#3a414b"))
 		for hy in range(int(base.y), int(base.y + r.size.y), 18):
-			draw_rect(Rect2(px + 2, hy, 2, 6), COL_STEEL_DARK)
-	draw_rect(Rect2(base.x - 8, base.y - 18, r.size.x + 16, 6), COL_STEEL)
+			draw_rect(Rect2(px + 2.5, hy, 2, 6), COL_STEEL_DARK)
+		# Stopka z pasem ostrzegawczym.
+		draw_rect(Rect2(px - 3, base.y + r.size.y - 6, 13, 6), Color("#e0b000"))
+	_grad_v(Rect2(base.x - 9, base.y - 19, r.size.x + 18, 7), Color("#8d98a6"), Color("#3a414b"))
 	var lamp := Vector2(base.x + r.size.x / 2.0, base.y - 15)
 	var lamp_col := LAMP_OFF
 	if complete:
@@ -990,16 +1075,14 @@ func _draw_stack(i: int) -> void:
 			br.position.y -= 24.0 + sin(time * 7.0) * 3.0
 		_draw_box(br, stack[k], _wrapped_during_anim(i, k))
 	var pr := Rect2(base.x - 6, base.y + r.size.y - pallet_h, r.size.x + 12, pallet_h)
-	draw_rect(Rect2(pr.position, Vector2(pr.size.x, pallet_h * 0.4)), COL_PALLET)
-	for b in 3:
-		var bx := pr.position.x + 2 + b * (pr.size.x - 24) / 2.0
-		draw_rect(Rect2(bx, pr.position.y + pallet_h * 0.4, 20, pallet_h * 0.6), COL_PALLET_DARK)
-	draw_rect(Rect2(pr.position.x, pr.end.y - 3, pr.size.x, 3), COL_PALLET)
+	_draw_pallet(pr)
 	if mode == "program":
 		# Numery palet - potrzebne do czytania programu.
 		draw_string(ThemeDB.fallback_font, Vector2(base.x, pr.end.y + 28), str(i + 1), HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 26, Color("#c8d0da"))
 	if selected == i:
-		draw_rect(Rect2(base, r.size).grow(8), COL_SELECT, false, 4.0)
+		for g in 4:
+			draw_rect(Rect2(base, r.size).grow(8 + g * 3), Color(COL_SELECT, 0.22 - g * 0.05), false, 3.0)
+		draw_rect(Rect2(base, r.size).grow(8), COL_SELECT, false, 3.0)
 	if not hint.is_empty() and (hint["from"] == i or hint["to"] == i):
 		var a := 0.7 + 0.3 * sin(time * 8.0)
 		var hr := Rect2(base, r.size).grow(10)
@@ -1007,6 +1090,34 @@ func _draw_stack(i: int) -> void:
 		draw_rect(hr, Color(COL_HINT, a), false, 6.0)
 		var label := "Z" if hint["from"] == i else "NA"
 		draw_string(ThemeDB.fallback_font, Vector2(base.x, base.y - 30), label, HORIZONTAL_ALIGNMENT_CENTER, r.size.x, 30, COL_HINT)
+
+
+func _draw_pallet(pr: Rect2) -> void:
+	var top_h := pallet_h * 0.42
+	_grad_v(Rect2(pr.position, Vector2(pr.size.x, top_h)), Color("#c58c52"), Color("#8f5f33"))
+	for k in range(1, 4):
+		var x := pr.position.x + pr.size.x * k / 4.0
+		draw_line(Vector2(x, pr.position.y), Vector2(x, pr.position.y + top_h), Color(0, 0, 0, 0.25), 1.5)
+	for b in 3:
+		var bx := pr.position.x + 2 + b * (pr.size.x - 24) / 2.0
+		_grad_v(Rect2(bx, pr.position.y + top_h, 20, pallet_h - top_h), Color("#7d532d"), Color("#4f331b"))
+		draw_circle(Vector2(bx + 10, pr.position.y + top_h * 0.5), 1.6, Color("#d9d2c5"))
+	_grad_v(Rect2(pr.position.x, pr.end.y - 3, pr.size.x, 3), Color("#a8743f"), Color("#6e4a2a"))
+
+
+## Prostokąt z pionowym gradientem (kolor u góry -> u dołu).
+func _grad_v(r: Rect2, top: Color, bottom: Color) -> void:
+	draw_polygon(PackedVector2Array([r.position, Vector2(r.end.x, r.position.y), r.end, Vector2(r.position.x, r.end.y)]),
+		PackedColorArray([top, top, bottom, bottom]))
+
+
+## Prostokąt z poziomym gradientem w trzech punktach (efekt walcowanego metalu).
+func _grad_h(r: Rect2, left: Color, mid: Color, right: Color) -> void:
+	var mx := r.position.x + r.size.x * 0.4
+	draw_polygon(PackedVector2Array([r.position, Vector2(mx, r.position.y), Vector2(mx, r.end.y), Vector2(r.position.x, r.end.y)]),
+		PackedColorArray([left, mid, mid, left]))
+	draw_polygon(PackedVector2Array([Vector2(mx, r.position.y), Vector2(r.end.x, r.position.y), r.end, Vector2(mx, r.end.y)]),
+		PackedColorArray([mid, right, right, mid]))
 
 
 func _wrapped_during_anim(i: int, k: int) -> bool:
@@ -1041,9 +1152,27 @@ func _draw_box(rect: Rect2, v: int, force_wrapped: bool = false) -> void:
 		return
 	var col: Color = PRODUCT_COLORS[v % PRODUCT_COLORS.size()]
 	draw_style_box(_box_style(v), inner)
-	draw_rect(Rect2(inner.position + Vector2(6, 4), Vector2(inner.size.x - 12, 4)), col.lightened(0.3))
-	draw_rect(Rect2(inner.get_center().x - 4, inner.position.y + 3, 8, inner.size.y - 8), col.lightened(0.18))
-	_draw_icon(v, inner.get_center(), minf(inner.size.x, inner.size.y) * 0.25, Color.WHITE)
+	# Cieniowanie: jaśniej u góry, ciemniej u dołu.
+	var body := inner.grow(-4)
+	_grad_v(body, Color(1, 1, 1, 0.16), Color(0, 0, 0, 0.18))
+	# Pokrywa kartonu (lekka perspektywa) i taśma.
+	var lid := minf(8.0, inner.size.y * 0.16)
+	draw_colored_polygon(PackedVector2Array([inner.position + Vector2(4, 3), Vector2(inner.end.x - 4, inner.position.y + 3),
+		Vector2(inner.end.x - 8, inner.position.y + 3 + lid), inner.position + Vector2(8, 3 + lid)]), Color(col.lightened(0.35), 0.8))
+	draw_rect(Rect2(inner.get_center().x - 5, inner.position.y + 3, 10, inner.size.y - 9), Color(col.lightened(0.4), 0.45))
+	# Plakietka z symbolem produktu.
+	var s := minf(inner.size.x, inner.size.y) * 0.25
+	var c := inner.get_center() + Vector2(-inner.size.x * 0.12, 1)
+	draw_circle(c, s * 1.45, col.darkened(0.32))
+	draw_arc(c, s * 1.45, 0, TAU, 24, Color(1, 1, 1, 0.25), 1.5)
+	_draw_icon(v, c, s, Color.WHITE)
+	# Naklejka z kodem kreskowym.
+	var tag := Rect2(inner.end.x - inner.size.x * 0.3, inner.get_center().y - inner.size.y * 0.2, inner.size.x * 0.22, inner.size.y * 0.4)
+	draw_rect(tag, Color(0.96, 0.96, 0.92, 0.92))
+	for k in 7:
+		var bx := tag.position.x + 3 + k * (tag.size.x - 6) / 7.0
+		var bw := 1.0 + float((v * 3 + k) % 3) * 0.7
+		draw_rect(Rect2(bx, tag.position.y + 3, bw, tag.size.y - 6), Color(0.1, 0.1, 0.1))
 
 
 func _draw_wrapped(inner: Rect2) -> void:
@@ -1116,9 +1245,38 @@ func _robot_state() -> Dictionary:
 		load = d
 		closed = false
 		grip_y = lerpf(d.y, idle_y, smoothstep(0.0, 1.0, minf((u - 0.9) / 0.1, 1.0)))
+	if anim.get("drop", false) and u >= 0.35 and u < 0.6:
+		load.x += sin(time * 70.0) * 5.0  # paczka się wyślizguje
 	if grip_y < 0.0:
 		grip_y = load.y
 	return {"grip": Vector2(load.x + half, grip_y), "load": load, "closed": closed}
+
+
+## Prowadnik kablowy (łańcuch energetyczny) nad szyną - jak w prawdziwych suwnicach.
+func _draw_cable_chain(cart_x: float) -> void:
+	var vs := get_viewport_rect().size
+	var fix_x := vs.x * 0.5
+	var low_y := rail_y - 30.0
+	var high_y := rail_y - 46.0
+	var bend_x := (fix_x + cart_x) / 2.0
+	var dir := 1.0 if cart_x >= fix_x else -1.0
+	draw_rect(Rect2(0, low_y + 6, vs.x, 3), Color(0, 0, 0, 0.35))  # korytko
+	var col := Color("#20252c")
+	var hi := Color("#454d58")
+	var x := fix_x
+	while (x - bend_x) * dir < 0.0:
+		draw_rect(Rect2(x - 5, low_y - 5, 9, 10), col)
+		draw_rect(Rect2(x - 5, low_y - 5, 9, 2), hi)
+		x += 11.0 * dir
+	draw_arc(Vector2(bend_x, (low_y + high_y) / 2.0), (low_y - high_y) / 2.0, -PI / 2.0 if dir > 0 else PI / 2.0,
+		PI / 2.0 if dir > 0 else 3.0 * PI / 2.0, 10, col, 10)
+	x = bend_x
+	while (cart_x - x) * dir > 0.0:
+		draw_rect(Rect2(x - 5, high_y - 5, 9, 10), col)
+		draw_rect(Rect2(x - 5, high_y - 5, 9, 2), hi)
+		x += 11.0 * dir
+	draw_line(Vector2(cart_x, high_y), Vector2(cart_x, rail_y - 18), col, 6)
+	draw_rect(Rect2(fix_x - 8, low_y - 8, 16, 16), COL_STEEL)
 
 
 func _draw_robot() -> void:
@@ -1132,15 +1290,33 @@ func _draw_robot() -> void:
 			var p := top_left + Vector2(0, (n_load - 1 - j) * box_size.y)
 			_draw_box(Rect2(p, box_size), anim["items"][j])
 	var w := box_size.x if box_size.x > 0 else 110.0
-	# Wózek na szynie.
-	var cart := Rect2(grip.x - 36, rail_y - 18, 72, 34)
+	_draw_cable_chain(grip.x)
+	# Wózek na szynie (metaliczny, z diodami stanu).
+	var cart := Rect2(grip.x - 38, rail_y - 18, 76, 34)
 	var sb := StyleBoxFlat.new()
 	sb.bg_color = robot_col
-	sb.border_color = robot_col.darkened(0.35)
-	sb.set_border_width_all(3)
+	sb.border_color = robot_col.darkened(0.45)
+	sb.set_border_width_all(2)
 	sb.set_corner_radius_all(8)
+	sb.shadow_color = Color(0, 0, 0, 0.35)
+	sb.shadow_size = 5
+	sb.shadow_offset = Vector2(0, 3)
 	draw_style_box(sb, cart)
-	draw_rect(Rect2(cart.position.x + 8, cart.position.y + 8, cart.size.x - 16, 6), Color(0, 0, 0, 0.25))
+	_grad_v(cart.grow(-3), Color(1, 1, 1, 0.28), Color(0, 0, 0, 0.22))
+	draw_rect(Rect2(cart.position.x + 6, cart.position.y + 5, cart.size.x - 12, 3), Color(1, 1, 1, 0.35))
+	var led_col := COL_DONE
+	if prog_state == "fault" or fault_time > 0.0:
+		led_col = COL_FAULT
+	elif not anim.is_empty():
+		led_col = Color("#ff9a36")
+	for k in 4:
+		var lp := Vector2(cart.position.x + 14 + k * 8, cart.end.y - 9)
+		var on := anim.is_empty() or int(time * 10.0) % 4 == k
+		draw_circle(lp, 2.6, led_col if on else led_col.darkened(0.6))
+		if on:
+			draw_circle(lp, 5, Color(led_col, 0.25))
+	for bx in [cart.position.x + 5, cart.end.x - 5]:
+		draw_circle(Vector2(bx, cart.position.y + 17), 2, robot_col.darkened(0.5))
 	for wx in [-22, 0, 22]:
 		draw_circle(Vector2(grip.x + wx, rail_y - 12), 5, COL_STEEL_DARK)
 	# Lampa: miga w ruchu, świeci na czerwono po błędzie programu.

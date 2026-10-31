@@ -19,6 +19,7 @@ signal tool_pressed(cap: int)
 signal prog_delete_pressed
 signal prog_clear_pressed
 signal prog_start_pressed
+signal fx_toggled
 
 const COL_ACCENT := Color("#ffb627")
 const COL_PANEL := Color("#1d2229")
@@ -26,7 +27,7 @@ const COL_TEXT := Color("#eef2f6")
 const COL_MUTED := Color("#9aa5b1")
 const COL_GREEN := Color("#3ddc84")
 const COL_RED := Color("#ff6b6b")
-const MOD_NAMES := {"folia": "Folia stretch", "limit": "Limit ruchów", "cap5": "Palety na 5", "chwytaki": "Chwytaki"}
+const MOD_NAMES := {"folia": "Folia stretch", "limit": "Limit ruchów", "cap5": "Palety na 5", "chwytaki": "Chwytaki", "upadki": "Śliskie paczki"}
 const TOOL_NAMES := {-1: "Próżnia", 2: "Widły", 1: "Szczęki"}
 const TOOL_INFO := {-1: "cały ciąg", 2: "do 2 szt.", 1: "1 szt."}
 
@@ -69,6 +70,8 @@ var btn_menu_campaign: Button
 var btn_menu_program: Button
 var btn_menu_decor: Button
 var btn_menu_sound: Button
+var btn_menu_fx: Button
+var fade: ColorRect
 var decor_layer: Control
 var decor_list: VBoxContainer
 var lbl_decor_stars: Label
@@ -85,7 +88,8 @@ func _ready() -> void:
 	add_child(root)
 
 	lbl_title = _label(44, COL_TEXT)
-	lbl_title.position = Vector2(24, 18)
+	lbl_title.add_theme_font_override("font", Look.bold)
+	lbl_title.position = Vector2(24, 14)
 	root.add_child(lbl_title)
 	lbl_info = _label(28, COL_MUTED)
 	lbl_info.position = Vector2(26, 78)
@@ -161,6 +165,18 @@ func _ready() -> void:
 	_build_decor()
 	_build_menu()
 	_build_busy()
+	# Przejście między poziomami (krótkie wygaszenie).
+	fade = ColorRect.new()
+	fade.color = Color(0.02, 0.03, 0.04, 1.0)
+	fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade.modulate.a = 0.0
+	root.add_child(fade)
+
+
+func transition() -> void:
+	fade.modulate.a = 1.0
+	create_tween().tween_property(fade, "modulate:a", 0.0, 0.45).set_trans(Tween.TRANS_SINE)
 
 
 func _process(delta: float) -> void:
@@ -303,6 +319,7 @@ func show_menu() -> void:
 	btn_menu_program.text = "Programowanie robota – program %d" % Save.program
 	btn_menu_decor.text = "Rozbudowa hali – %d" % Save.stars_available()
 	btn_menu_sound.text = "Dźwięk: wł." if Save.sound_on else "Dźwięk: wył."
+	btn_menu_fx.text = "Efekty graficzne: wł." if Save.fx_on else "Efekty graficzne: wył."
 	menu_layer.visible = true
 
 
@@ -338,7 +355,8 @@ func _build_win() -> void:
 	win_layer = _overlay()
 	win_panel = _panel(win_layer)
 	var v := _vbox(win_panel)
-	lbl_win = _label(38, COL_TEXT)
+	lbl_win = _label(36, COL_TEXT)
+	lbl_win.add_theme_font_override("font", Look.bold)
 	lbl_win.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_win)
 	win_stars = StarRow.new(64)
@@ -423,7 +441,7 @@ func _build_level_picker() -> void:
 	lbl_level_err.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_level_err)
 	var hint := _label(20, COL_MUTED)
-	hint.text = "Nowości: 18 folia • 23 limit • 28 palety na 5 • 33 chwytaki"
+	hint.text = "Nowości: 18 folia • 23 limit • 28 palety na 5\n33 chwytaki • 40 śliskie paczki"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(hint)
 	var ok := _button("Zatwierdź", func(): _confirm_level())
@@ -453,7 +471,8 @@ func _build_menu() -> void:
 	menu_layer = _overlay()
 	(menu_layer as ColorRect).color = Color(0.06, 0.07, 0.09, 0.94)
 	var v := _vbox(_panel(menu_layer))
-	var t := _label(52, COL_ACCENT)
+	var t := _label(60, COL_ACCENT)
+	t.add_theme_font_override("font", Look.bold)
 	t.text = "Fabryka Sort"
 	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(t)
@@ -475,7 +494,17 @@ func _build_menu() -> void:
 		sound_toggled.emit()
 		btn_menu_sound.text = "Dźwięk: wł." if Save.sound_on else "Dźwięk: wył.")
 	btn_menu_sound.custom_minimum_size = Vector2(560, 80)
-	v.add_child(btn_menu_sound)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	v.add_child(row)
+	btn_menu_sound.custom_minimum_size = Vector2(0, 80)
+	btn_menu_sound.add_theme_font_size_override("font_size", 22)
+	row.add_child(btn_menu_sound)
+	btn_menu_fx = _button("", func():
+		fx_toggled.emit()
+		btn_menu_fx.text = "Efekty graficzne: wł." if Save.fx_on else "Efekty graficzne: wył.", 22)
+	btn_menu_fx.custom_minimum_size = Vector2(0, 80)
+	row.add_child(btn_menu_fx)
 
 
 func _menu_button(cb: Callable) -> Button:
@@ -611,8 +640,8 @@ func _panel(layer: Control) -> PanelContainer:
 	sb.content_margin_right = 32
 	sb.content_margin_top = 28
 	sb.content_margin_bottom = 28
-	sb.shadow_size = 18
-	sb.shadow_color = Color(0, 0, 0, 0.5)
+	sb.shadow_size = 26
+	sb.shadow_color = Color(1.0, 0.7, 0.15, 0.12)
 	panel.add_theme_stylebox_override("panel", sb)
 	layer.get_child(0).add_child(panel)
 	return panel
@@ -628,6 +657,7 @@ func _vbox(parent: Control) -> VBoxContainer:
 
 func _title(text: String) -> Label:
 	var l := _label(40, COL_TEXT)
+	l.add_theme_font_override("font", Look.bold)
 	l.text = text
 	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	return l
@@ -649,6 +679,10 @@ func _button(text: String, cb: Callable, size: int = 28) -> Button:
 	b.pressed.connect(func():
 		Sfx.play("click")
 		cb.call())
+	# Animacja wciśnięcia: przycisk lekko się zmniejsza i "odbija".
+	b.resized.connect(func(): b.pivot_offset = b.size / 2.0)
+	b.button_down.connect(func(): b.create_tween().tween_property(b, "scale", Vector2(0.94, 0.94), 0.06))
+	b.button_up.connect(func(): b.create_tween().tween_property(b, "scale", Vector2.ONE, 0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT))
 	return b
 
 
@@ -665,6 +699,9 @@ func _make_theme() -> Theme:
 	var th := Theme.new()
 	var normal := _box(Color("#323a45"), Color("#59636f"), 2)
 	normal.border_width_bottom = 6
+	normal.shadow_color = Color(0, 0, 0, 0.35)
+	normal.shadow_size = 6
+	normal.shadow_offset = Vector2(0, 3)
 	var hover := _box(Color("#3a4350"), Color("#6b7684"), 2)
 	hover.border_width_bottom = 6
 	var pressed := _box(Color("#272d35"), COL_ACCENT, 2)

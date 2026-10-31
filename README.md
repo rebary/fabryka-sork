@@ -46,7 +46,8 @@ Przycisk jest widoczny tylko w edytorze i w wersjach testowych (debug). W wersji
 | 23 | Nowość: **limit ruchów** – cofnięcie zwraca ruch |
 | 28 | Nowość: **palety na 5** paczek |
 | 33 | Nowość: **wymiana chwytaków** – próżnia (cały ciąg albo nic), widły (do 2), szczęki (1). Zmiana kosztuje ruch |
-| 36+ | Utrudnienia na przemian, czasem dwa naraz, czasem zlecenie bez utrudnień |
+| 40 | Nowość: **śliskie paczki** – z szansą 4% paczka wyślizguje się i spada z powrotem; ruch przepada i nie da się go cofnąć. Przy limicie ruchów generator dolicza zapas |
+| 43+ | Utrudnienia na przemian, czasem dwa naraz, czasem zlecenie bez utrudnień |
 | co 5. (od 10.) | Zlecenie „przerwa”: łatwiejsze, bez utrudnień |
 
 Przy pierwszym wystąpieniu nowości gra pokazuje krótką planszę z wyjaśnieniem. Natężenie (ile paczek w folii, jak ciasny limit) rośnie powoli do ok. 90. zlecenia.
@@ -63,6 +64,14 @@ Trudność jest **mierzona**: generator rozgrywa każdego kandydata na poziom ki
   - **rzadkie znalezisko:** 0,3% szansy przy podniesieniu paczki, najwyżej raz na zlecenie. Cofanie i powtarzanie ruchów nie zwiększa szansy. Stała `FIND_HINT_CHANCE` w `scripts/main.gd`.
 - **Do kupienia:** pakiety 5, 15 i 40 podpowiedzi (identyfikatory `hints_5`, `hints_15`, `hints_40` w `scripts/store.gd`).
 - **Tryb testowy:** zakup i reklama są symulowane. Prawdziwe płatności (Google Play Billing) i reklamy (np. AdMob) to osobny etap. Wymagają konta Google Play Console, wtyczek do Godota i testów na telefonie.
+
+## Grafika
+- Wszystko jest rysowane kodem. Dochodzą: czcionka Exo 2, shader efektów obrazu (`assets/shaders/post.gdshader`: poświata, kolory, winieta, ziarno), głębia hali (świetliki, regały w tle, kurz), cieniowane kartony z naklejkami, prowadnik kablowy robota, diody stanu.
+- Efekty obrazu można wyłączyć w menu („Efekty graficzne”), jeśli telefon nie daje rady.
+
+## Licencje zasobów
+- Czcionka **Exo 2** – SIL Open Font License 1.1 (`assets/fonts/OFL-Exo2.txt`). Plik licencji musi zostać dołączony do gry.
+- Dźwięki – własne, wygenerowane skryptem `tools/make_sfx.py`.
 
 ## Struktura plików
 | Plik | Do czego służy |

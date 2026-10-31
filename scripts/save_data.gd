@@ -8,6 +8,7 @@ var level: int = 1  # następne zlecenie kampanii
 var program: int = 1  # następny program (tryb programowania)
 var wallet := HintWallet.new()
 var sound_on: bool = true
+var fx_on: bool = true  # efekty graficzne całego obrazu
 var seen_intros: Array = []
 var stars: Dictionary = {}  # zlecenie -> najlepsza liczba gwiazdek
 var program_stars: Dictionary = {}  # program -> najlepsza liczba gwiazdek
@@ -34,6 +35,7 @@ func load_data() -> void:
 	decor_owned = cfg.get_value("decor", "owned", [])
 	decor_selected = cfg.get_value("decor", "selected", {})
 	sound_on = bool(cfg.get_value("settings", "sound_on", true))
+	fx_on = bool(cfg.get_value("settings", "fx_on", true))
 
 
 func save() -> void:
@@ -48,6 +50,7 @@ func save() -> void:
 	cfg.set_value("decor", "owned", decor_owned)
 	cfg.set_value("decor", "selected", decor_selected)
 	cfg.set_value("settings", "sound_on", sound_on)
+	cfg.set_value("settings", "fx_on", fx_on)
 	cfg.save(PATH)
 
 

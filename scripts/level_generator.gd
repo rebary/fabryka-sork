@@ -6,7 +6,7 @@ extends RefCounted
 ## KRZYWA TRUDNOŚCI KAMPANII (wszystkie liczby można stroić w tym pliku):
 ##  - zlecenia 1-15: rośnie liczba produktów (3 -> 8), bez utrudnień;
 ##  - nowości pojawiają się stopniowo: folia (18), limit ruchów (23), palety na 5 (28),
-##    wymiana chwytaków (33);
+##    wymiana chwytaków (33), śliskie paczki (40);
 ##  - potem utrudnienia występują na przemian, czasem po dwa naraz;
 ##  - co 5. zlecenie (od 10.) jest "przerwą": łatwiejsze, bez utrudnień;
 ##  - z kilku losowych kandydatów wybieramy ten o trudności najbliższej celowi.
@@ -15,9 +15,13 @@ const MOD_WRAP := "folia"
 const MOD_LIMIT := "limit"
 const MOD_CAP5 := "cap5"
 const MOD_GRIP := "chwytaki"
-const ALL_MODS := [MOD_WRAP, MOD_LIMIT, MOD_CAP5, MOD_GRIP]
-const INTRO_LEVEL := {MOD_WRAP: 18, MOD_LIMIT: 23, MOD_CAP5: 28, MOD_GRIP: 33}
-const PAIRS := [[MOD_WRAP, MOD_LIMIT], [MOD_CAP5, MOD_WRAP], [MOD_CAP5, MOD_LIMIT], [MOD_GRIP, MOD_LIMIT], [MOD_GRIP, MOD_WRAP]]
+const MOD_DROP := "upadki"
+const ALL_MODS := [MOD_WRAP, MOD_LIMIT, MOD_CAP5, MOD_GRIP, MOD_DROP]
+const INTRO_LEVEL := {MOD_WRAP: 18, MOD_LIMIT: 23, MOD_CAP5: 28, MOD_GRIP: 33, MOD_DROP: 40}
+const PAIRS := [[MOD_WRAP, MOD_LIMIT], [MOD_CAP5, MOD_WRAP], [MOD_CAP5, MOD_LIMIT], [MOD_GRIP, MOD_LIMIT],
+	[MOD_GRIP, MOD_WRAP], [MOD_DROP, MOD_WRAP], [MOD_DROP, MOD_CAP5], [MOD_DROP, MOD_GRIP]]
+## Szansa, że paczka wyślizgnie się z chwytaka (utrudnienie "śliskie paczki").
+const DROP_CHANCE := 0.04
 const GRIP_TOOLS := [Board.TOOL_VACUUM, 2, 1]
 
 const CANDIDATES := 3
@@ -56,7 +60,7 @@ static func params_for_level(level: int) -> Dictionary:
 			mods = [m]
 			p["intro"] = m
 	if mods.is_empty():
-		var last_intro: int = INTRO_LEVEL[MOD_GRIP]
+		var last_intro: int = INTRO_LEVEL[MOD_DROP]
 		if level <= last_intro + 2:
 			# Faza wprowadzania: na przemian "bez utrudnień" i poznane utrudnienia.
 			var options: Array = [null]
@@ -67,13 +71,13 @@ static func params_for_level(level: int) -> Dictionary:
 			if pick != null:
 				mods = [pick]
 		else:
-			# Faza pełna: cykl 6 zleceń - cztery pojedyncze utrudnienia, para i "czyste".
-			match level % 6:
-				0, 1, 2, 3:
-					mods = [ALL_MODS[level % 6]]
-				4:
-					mods = PAIRS[floori(level / 6.0) % PAIRS.size()]
+			# Faza pełna: cykl 7 zleceń - pięć pojedynczych utrudnień, para i "czyste".
+			match level % 7:
+				0, 1, 2, 3, 4:
+					mods = [ALL_MODS[level % 7]]
 				5:
+					mods = PAIRS[floori(level / 7.0) % PAIRS.size()]
+				6:
 					mods = []
 	p["mods"] = mods
 	if mods.has(MOD_CAP5):
@@ -124,6 +128,8 @@ static func generate(level: int) -> Dictionary:
 	var limit := 0
 	if mods.has(MOD_LIMIT):
 		limit = par + maxi(2, ceili(par * float(p["limit_slack"])))
+		if mods.has(MOD_DROP):
+			limit += ceili(par * DROP_CHANCE) + 1  # zapas na spodziewane upadki
 	return {"board": best, "params": p, "move_limit": limit, "par": par, "difficulty": best_score}
 
 
