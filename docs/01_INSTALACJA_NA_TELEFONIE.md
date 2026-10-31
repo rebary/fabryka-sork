@@ -7,6 +7,18 @@ Cel: plik `.apk`, który zainstalujesz na swoim telefonie i wyślesz testerom.
 
 Szacowany czas za pierwszym razem: 1–2 godziny (głównie pobieranie). Kolejne eksporty: 1–2 minuty.
 
+## Najszybszy test: jeden plik HTML (bez instalacji)
+Plik `FabrykaSort.html` zawiera całą grę. Otwórz go dwuklikiem w **Chrome lub Edge** na komputerze – gra działa bez internetu i bez instalowania czegokolwiek. Postęp zapisuje się w tej przeglądarce.
+
+Jak zbudować go ponownie po zmianach w grze (z folderu projektu):
+```bash
+godot --headless --export-debug "Web" build/web/index.html
+```
+```bash
+python3 tools/build_single_html.py build/web FabrykaSort.html
+```
+Do eksportu potrzebne są szablony eksportu Godota 4.7.2 (Editor → Manage Export Templates) i preset „Web” (Project → Export → Add… → Web, bez obsługi wątków – „Thread Support” wyłączone).
+
 ---
 
 ## Krok 1. Zainstaluj Javę (JDK 17)

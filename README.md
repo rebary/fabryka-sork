@@ -6,6 +6,9 @@ Nazwa jest robocza. Przed publikacją sprawdź, czy nie jest zajęta w Google Pl
 
 **Status:** prototyp do testów grywalności. To nie jest gotowy produkt. Sklep i reklamy działają tylko w **trybie testowym** (bez prawdziwych płatności i reklam).
 
+## Szybki test w przeglądarce
+`FabrykaSort.html` – cała gra w jednym pliku: otwórz dwuklikiem w Chrome/Edge. Budowa: `tools/build_single_html.py` (instrukcja w `docs/01_INSTALACJA_NA_TELEFONIE.md`).
+
 ## Dokumenty
 - `docs/01_INSTALACJA_NA_TELEFONIE.md` – jak zbudować APK i zainstalować grę na telefonie
 - `docs/02_PUBLIKACJA_GOOGLE_PLAY.md` – jak tanio opublikować grę w Google Play
