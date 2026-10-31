@@ -6,6 +6,12 @@ Nazwa jest robocza. Przed publikacją sprawdź, czy nie jest zajęta w Google Pl
 
 **Status:** prototyp do testów grywalności. To nie jest gotowy produkt. Sklep i reklamy działają tylko w **trybie testowym** (bez prawdziwych płatności i reklam).
 
+## Dokumenty
+- `docs/01_INSTALACJA_NA_TELEFONIE.md` – jak zbudować APK i zainstalować grę na telefonie
+- `docs/02_PUBLIKACJA_GOOGLE_PLAY.md` – jak tanio opublikować grę w Google Play
+- `docs/03_PLAN_WDROZENIA.md` – etapy od testów do premiery, kryteria decyzji, ryzyka
+- `docs/04_KAMPANIA_MARKETINGOWA.md` – pozycjonowanie, teksty do sklepu, kanały, kalendarz
+
 ## Wymagania
 - **Godot 4.7.x, wersja standardowa** (nie .NET), z https://godotengine.org/download. Projekt sprawdzono na 4.7.2.
 - Nic więcej do samej gry. Do ponownego wygenerowania dźwięków: Python 3 + numpy (opcjonalnie).
