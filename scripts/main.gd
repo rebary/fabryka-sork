@@ -129,6 +129,10 @@ func _ready() -> void:
 	hud.prog_delete_pressed.connect(_on_prog_delete)
 	hud.prog_clear_pressed.connect(_on_prog_clear)
 	hud.prog_start_pressed.connect(_on_prog_start)
+	hud.survey_submitted.connect(_on_survey_submitted)
+	hud.survey_opened.connect(func(): Save.feedback_prompted = true)
+	hud.menu_pressed.connect(func(): Feedback.flush())
+	Feedback.sent_ok.connect(func(_n): pass)
 	Store.purchase_finished.connect(_on_purchase_finished)
 	Store.ad_finished.connect(_on_ad_finished)
 	get_viewport().size_changed.connect(_on_resize)
@@ -164,8 +168,36 @@ func _start_program_mode() -> void:
 		hud.show_intro(INTROS["program"][0], INTROS["program"][1])
 
 
+## Jednorazowe zaproszenie do ankiety po 5 ukończonych zadaniach (łatwe do odrzucenia).
+const SURVEY_PROMPT_AFTER := 5
+
+
+func _maybe_prompt_survey() -> void:
+	if not Save.feedback_prompted and Save.tasks_completed >= SURVEY_PROMPT_AFTER:
+		Save.feedback_prompted = true
+		Save.save()
+		hud.show_survey_prompt()
+
+
+func _on_survey_submitted(answers: Dictionary) -> void:
+	var context := {
+		"mode_at_survey": mode if mode != "" else "menu",
+		"campaign_level": Save.level,
+		"program_number": Save.program,
+		"stars": Save.total_stars(),
+		"hints": Save.wallet.hints,
+		"tasks_completed": Save.tasks_completed,
+	}
+	Feedback.submit(answers, context)
+	Sfx.play("reward")
+	hud.show_menu()
+	var where := "Wysyłamy ją do twórcy." if Feedback.endpoint != "" else "Zapisaliśmy ją na telefonie – zostanie wysłana, gdy ankiety zostaną włączone."
+	hud.show_intro("Dziękujemy!", "Twoja opinia jest dla nas bardzo ważna.\n" + where)
+
+
 func _on_next() -> void:
 	hud.hide_win()
+	_maybe_prompt_survey()
 	if mode == "program":
 		_request("p", prog["number"] + 1)
 	else:
@@ -373,6 +405,7 @@ func _on_level_complete() -> void:
 	var new_stars: int = Save.record_stars(false, level, stars)
 	var bonus: int = Save.wallet.on_level_completed()
 	Save.level = level + 1
+	Save.tasks_completed += 1
 	Save.save()
 	_update_hud()
 	fx.confetti(get_viewport_rect().size.x)
@@ -513,6 +546,7 @@ func _on_program_complete() -> void:
 	var new_stars: int = Save.record_stars(true, number, stars)
 	var bonus: int = Save.wallet.on_level_completed()
 	Save.program = maxi(Save.program, number + 1)
+	Save.tasks_completed += 1
 	Save.save()
 	_update_hud()
 	fx.confetti(get_viewport_rect().size.x)
@@ -788,6 +822,8 @@ func _stack_at(pos: Vector2) -> int:
 
 func _process(delta: float) -> void:
 	time += delta
+	if mode != "" and not hud.menu_layer.visible:
+		Save.playtime += delta
 	_pump_generation()
 	if not anim.is_empty():
 		anim["e"] += delta

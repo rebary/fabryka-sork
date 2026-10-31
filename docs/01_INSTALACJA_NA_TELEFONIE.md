@@ -53,7 +53,7 @@ Najprościej przez **Android Studio** (darmowe), które pobiera SDK za Ciebie.
    - **Version → Code**: `1` (przy każdej nowej wersji wysyłanej do Google Play zwiększasz o 1).
    - **Version → Name**: `0.1.0`.
    - **Architectures**: zaznacz **arm64-v8a** (nowe telefony). Opcjonalnie **armeabi-v7a** (bardzo stare telefony).
-   - **Permissions**: niczego nie zaznaczaj – gra nie potrzebuje uprawnień.
+   - **Permissions**: zaznacz tylko **Internet** – potrzebne do wysyłania ankiet (`05_ANKIETA_I_ANALIZA.md`). Inne uprawnienia nie są potrzebne.
 3. Zamknij okno (ustawienia zapiszą się w pliku `export_presets.cfg`; jest on w `.gitignore`, bo zawiera ścieżki do kluczy).
 
 ## Krok 6. Zbuduj plik APK

@@ -15,10 +15,21 @@ var program_stars: Dictionary = {}  # program -> najlepsza liczba gwiazdek
 var stars_spent: int = 0
 var decor_owned: Array = []
 var decor_selected: Dictionary = {}  # miejsce -> id ozdoby
+var install_id: String = ""  # losowy, anonimowy identyfikator instalacji (do ankiet)
+var playtime: float = 0.0  # łączny czas gry w sekundach
+var tasks_completed: int = 0  # ukończone zlecenia + programy
+var feedback_pending: Array = []  # ankiety czekające na wysłanie (np. brak internetu)
+var feedback_sent: int = 0
+var feedback_prompted: bool = false
 
 
 func _ready() -> void:
 	load_data()
+	if install_id == "":
+		var rng := RandomNumberGenerator.new()
+		rng.randomize()
+		install_id = "%08x%08x" % [rng.randi(), rng.randi()]
+		save()
 
 
 func load_data() -> void:
@@ -36,6 +47,12 @@ func load_data() -> void:
 	decor_selected = cfg.get_value("decor", "selected", {})
 	sound_on = bool(cfg.get_value("settings", "sound_on", true))
 	fx_on = bool(cfg.get_value("settings", "fx_on", true))
+	install_id = str(cfg.get_value("feedback", "install_id", ""))
+	playtime = float(cfg.get_value("progress", "playtime", 0.0))
+	tasks_completed = int(cfg.get_value("progress", "tasks_completed", 0))
+	feedback_pending = cfg.get_value("feedback", "pending", [])
+	feedback_sent = int(cfg.get_value("feedback", "sent", 0))
+	feedback_prompted = bool(cfg.get_value("feedback", "prompted", false))
 
 
 func save() -> void:
@@ -51,6 +68,12 @@ func save() -> void:
 	cfg.set_value("decor", "selected", decor_selected)
 	cfg.set_value("settings", "sound_on", sound_on)
 	cfg.set_value("settings", "fx_on", fx_on)
+	cfg.set_value("feedback", "install_id", install_id)
+	cfg.set_value("progress", "playtime", playtime)
+	cfg.set_value("progress", "tasks_completed", tasks_completed)
+	cfg.set_value("feedback", "pending", feedback_pending)
+	cfg.set_value("feedback", "sent", feedback_sent)
+	cfg.set_value("feedback", "prompted", feedback_prompted)
 	cfg.save(PATH)
 
 

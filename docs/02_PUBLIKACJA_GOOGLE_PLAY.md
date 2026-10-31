@@ -16,7 +16,7 @@ To nie jest porada prawna ani podatkowa – w sprawach podatków i działalnośc
 
 ## 2. Rekomendowana kolejność (najtaniej i najbezpieczniej)
 1. **Pierwsza publiczna wersja bez płatności i bez reklam** (gra darmowa, podpowiedzi tylko darmowe).
-   - Prostszy formularz „Bezpieczeństwo danych” (gra nie zbiera danych – zapis jest tylko na telefonie).
+   - Prostszy formularz „Bezpieczeństwo danych” (jedyne zbierane dane to dobrowolna, anonimowa ankieta).
    - Konto bez sprzedaży nie musi mieć profilu sprzedawcy (patrz pkt 4 – adres).
    - Zbierasz opinie i oceny, zanim zaczniesz zarabiać.
 2. **Aktualizacja z zarabianiem** (reklama za nagrodą + pakiety podpowiedzi), gdy testy pokażą, że gracze wracają.
@@ -52,8 +52,8 @@ To nie jest porada prawna ani podatkowa – w sprawach podatków i działalnośc
 | Film (opcjonalnie) | link do YouTube, 15–30 s prawdziwej rozgrywki |
 
 ### 3.4. Obowiązkowe formularze (bezpłatne)
-- **Polityka prywatności** – adres strony WWW. Na start: „gra nie zbiera danych osobowych; postęp jest zapisany wyłącznie na urządzeniu”. Po dodaniu reklam/płatności – zaktualizować.
-- **Bezpieczeństwo danych (Data safety)** – zgodnie z prawdą: obecnie brak zbierania danych.
+- **Polityka prywatności** – adres strony WWW. Musi opisać **ankietę w grze** (dobrowolna, anonimowa; jakie dane, cel, przechowywanie w Google Sheets, kontakt w sprawie usunięcia) – szczegóły w `05_ANKIETA_I_ANALIZA.md`. Postęp gry jest zapisany wyłącznie na urządzeniu. Po dodaniu reklam/płatności – zaktualizować.
+- **Bezpieczeństwo danych (Data safety)** – zgodnie z prawdą: opcjonalnie zbierane **opinie w aplikacji** i **informacje o urządzeniu/identyfikator instalacji** (cel: ulepszanie gry, HTTPS, bez udostępniania).
 - **Klasyfikacja treści (IARC)** – kwestionariusz; gra logiczna bez przemocy.
 - **Grupa docelowa** – nie kieruj gry do dzieci poniżej 13 lat (wtedy obowiązują znacznie ostrzejsze zasady programu „Rodzina”, m.in. dotyczące reklam).
 - **Reklamy** – zaznacz „nie” w wersji bez reklam; zmień przy aktualizacji z reklamami.

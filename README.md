@@ -11,6 +11,7 @@ Nazwa jest robocza. Przed publikacją sprawdź, czy nie jest zajęta w Google Pl
 - `docs/02_PUBLIKACJA_GOOGLE_PLAY.md` – jak tanio opublikować grę w Google Play
 - `docs/03_PLAN_WDROZENIA.md` – etapy od testów do premiery, kryteria decyzji, ryzyka
 - `docs/04_KAMPANIA_MARKETINGOWA.md` – pozycjonowanie, teksty do sklepu, kanały, kalendarz
+- `docs/05_ANKIETA_I_ANALIZA.md` – ankieta w grze, arkusz Google z automatyczną analizą (`docs/ankieta/Code.gs`)
 
 ## Wymagania
 - **Godot 4.7.x, wersja standardowa** (nie .NET), z https://godotengine.org/download. Projekt sprawdzono na 4.7.2.
@@ -90,6 +91,7 @@ Trudność jest **mierzona**: generator rozgrywa każdego kandydata na poziom ki
 | `scripts/hint_wallet.gd` | Licznik podpowiedzi i nagrody |
 | `scripts/decor.gd` | Katalog ozdób hali (nazwy, ceny w gwiazdkach) |
 | `scripts/star_row.gd` | Gwiazdki rysowane kodem |
+| `scripts/feedback.gd` | Autoload `Feedback` – wysyłka ankiet do arkusza Google (adres i klucz do uzupełnienia), kolejka offline |
 | `scripts/levels.gd` | Autoload `Levels` – wczytuje gotowe poziomy z `data/levels.json` |
 | `data/levels.json` | Zlecenia 1–150 i programy 1–60 wyliczone z góry |
 | `tools/precompute_levels.gd` | Narzędzie do ponownego wyliczenia `data/levels.json` |

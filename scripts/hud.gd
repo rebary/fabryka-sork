@@ -20,6 +20,8 @@ signal prog_delete_pressed
 signal prog_clear_pressed
 signal prog_start_pressed
 signal fx_toggled
+signal survey_submitted(answers: Dictionary)
+signal survey_opened
 
 const COL_ACCENT := Color("#ffb627")
 const COL_PANEL := Color("#1d2229")
@@ -73,6 +75,21 @@ var btn_menu_decor: Button
 var btn_menu_sound: Button
 var btn_menu_fx: Button
 var fade: ColorRect
+# Ankieta.
+const SURVEY_CHOICES := {
+	"difficulty": ["za łatwa", "w sam raz", "za trudna"],
+	"favorite_mode": ["kampania", "programowanie", "oba", "żaden"],
+	"recommend": ["tak", "może", "nie"],
+}
+var survey_layer: Control
+var survey_answers := {}
+var survey_stars: Array = []
+var survey_choice_buttons := {}
+var txt_liked: TextEdit
+var txt_improve: TextEdit
+var lbl_survey_err: Label
+var prompt_layer: Control
+var star_gray: ImageTexture
 var decor_layer: Control
 var decor_list: VBoxContainer
 var lbl_decor_stars: Label
@@ -165,6 +182,8 @@ func _ready() -> void:
 	_build_level_picker()
 	_build_decor()
 	_build_menu()
+	_build_survey()
+	_build_survey_prompt()
 	_build_busy()
 	# Przejście między poziomami (krótkie wygaszenie).
 	fade = ColorRect.new()
@@ -303,6 +322,7 @@ func show_shop() -> void:
 func show_intro(title: String, text: String) -> void:
 	lbl_intro_title.text = title
 	lbl_intro.text = text
+	intro_layer.move_to_front()
 	intro_layer.visible = true
 
 
@@ -346,7 +366,7 @@ func show_decor() -> void:
 
 
 func is_modal_open() -> bool:
-	for l in [win_layer, shop_layer, intro_layer, busy_layer, level_layer, menu_layer, decor_layer]:
+	for l in [win_layer, shop_layer, intro_layer, busy_layer, level_layer, menu_layer, decor_layer, survey_layer, prompt_layer]:
 		if l.visible:
 			return true
 	return false
@@ -494,6 +514,11 @@ func _build_menu() -> void:
 	btn_menu_decor.icon = star_icon
 	btn_menu_decor.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	v.add_child(btn_menu_decor)
+	var btn_survey := _menu_button(func(): show_survey())
+	btn_survey.text = "Ankieta – podziel się wrażeniami"
+	btn_survey.custom_minimum_size = Vector2(560, 84)
+	btn_survey.add_theme_stylebox_override("normal", _box(Color("#3a2f4d"), Color("#c77dff"), 3))
+	v.add_child(btn_survey)
 	btn_menu_sound = _menu_button(func():
 		sound_toggled.emit()
 		btn_menu_sound.text = "Dźwięk: wł." if Save.sound_on else "Dźwięk: wył.")
@@ -591,6 +616,189 @@ func refresh_decor() -> void:
 			if selected:
 				b.add_theme_stylebox_override("normal", _box(Color("#1f4a5c"), Color("#4fd1ff"), 3))
 			decor_list.add_child(b)
+
+
+# ---------------------------------------------------------------- ankieta
+
+func show_survey() -> void:
+	survey_opened.emit()
+	survey_answers = {}
+	txt_liked.text = ""
+	txt_improve.text = ""
+	lbl_survey_err.text = ""
+	_refresh_survey()
+	menu_layer.visible = false
+	prompt_layer.visible = false
+	survey_layer.move_to_front()
+	survey_layer.visible = true
+
+
+func show_survey_prompt() -> void:
+	prompt_layer.move_to_front()
+	prompt_layer.visible = true
+
+
+func _build_survey() -> void:
+	star_gray = StarRow.texture(44, Color("#4a525e"))
+	survey_layer = _overlay()
+	(survey_layer as ColorRect).color = Color(0.03, 0.04, 0.06, 0.9)
+	var v := _vbox(_panel(survey_layer))
+	v.add_theme_constant_override("separation", 10)
+	v.add_child(_title("Twoje wrażenia"))
+	var info := _label(20, COL_MUTED)
+	info.text = "6 krótkich pytań. Ankieta jest anonimowa\ni pomaga ulepszać grę."
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(info)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(540, 760)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(scroll)
+	var q := VBoxContainer.new()
+	q.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	q.add_theme_constant_override("separation", 10)
+	scroll.add_child(q)
+
+	q.add_child(_question("1. Jak oceniasz grę?"))
+	var stars_row := HBoxContainer.new()
+	stars_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	q.add_child(stars_row)
+	for i in 5:
+		var b := Button.new()
+		b.flat = true
+		b.icon = star_gray
+		b.custom_minimum_size = Vector2(88, 72)
+		b.expand_icon = false
+		b.pressed.connect(func():
+			Sfx.play("click")
+			survey_answers["rating"] = i + 1
+			_refresh_survey())
+		stars_row.add_child(b)
+		survey_stars.append(b)
+	q.add_child(_question("2. Jak trudna jest gra?"))
+	q.add_child(_choice_row("difficulty"))
+	q.add_child(_question("3. Który tryb lubisz najbardziej?"))
+	q.add_child(_choice_row("favorite_mode"))
+	q.add_child(_question("4. Czy poleciłbyś grę znajomym?"))
+	q.add_child(_choice_row("recommend"))
+	q.add_child(_question("5. Co najbardziej Ci się podoba? (opcjonalnie)"))
+	txt_liked = _text_box()
+	q.add_child(txt_liked)
+	q.add_child(_question("6. Co powinniśmy poprawić? (opcjonalnie)"))
+	txt_improve = _text_box()
+	q.add_child(txt_improve)
+	var note := _label(18, COL_MUTED)
+	note.text = "Nie wpisuj danych osobowych. Razem z odpowiedziami\nwysyłamy: wersję gry, postęp, czas gry, model telefonu\ni losowy identyfikator instalacji."
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	q.add_child(note)
+
+	lbl_survey_err = _label(22, COL_RED)
+	lbl_survey_err.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(lbl_survey_err)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	v.add_child(row)
+	var cancel := _button("Anuluj", func():
+		survey_layer.visible = false
+		show_menu(), 24)
+	cancel.custom_minimum_size = Vector2(0, 90)
+	row.add_child(cancel)
+	var send := _button("Wyślij", func(): _send_survey(), 26)
+	send.custom_minimum_size = Vector2(0, 90)
+	send.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), COL_GREEN, 3))
+	row.add_child(send)
+
+
+func _question(text: String) -> Label:
+	var l := _label(24, COL_ACCENT)
+	l.text = text
+	l.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	return l
+
+
+func _choice_row(key: String) -> GridContainer:
+	var row := GridContainer.new()
+	row.columns = 2 if SURVEY_CHOICES[key].size() > 3 else SURVEY_CHOICES[key].size()
+	row.add_theme_constant_override("h_separation", 8)
+	row.add_theme_constant_override("v_separation", 8)
+	survey_choice_buttons[key] = []
+	for option in SURVEY_CHOICES[key]:
+		var b := _button(option, func():
+			survey_answers[key] = option
+			_refresh_survey(), 20)
+		b.custom_minimum_size = Vector2(0, 68)
+		row.add_child(b)
+		survey_choice_buttons[key].append(b)
+	return row
+
+
+func _text_box() -> TextEdit:
+	var t := TextEdit.new()
+	t.custom_minimum_size = Vector2(0, 110)
+	t.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	t.add_theme_font_size_override("font_size", 22)
+	t.placeholder_text = "Napisz kilka słów…"
+	return t
+
+
+func _refresh_survey() -> void:
+	var rating: int = survey_answers.get("rating", 0)
+	for i in survey_stars.size():
+		survey_stars[i].icon = star_icon_big() if i < rating else star_gray
+	for key in survey_choice_buttons:
+		var options: Array = SURVEY_CHOICES[key]
+		for i in options.size():
+			var b: Button = survey_choice_buttons[key][i]
+			if survey_answers.get(key, "") == options[i]:
+				b.add_theme_stylebox_override("normal", _box(Color("#1f4a5c"), Color("#4fd1ff"), 3))
+				b.add_theme_color_override("font_color", Color("#4fd1ff"))
+			else:
+				b.remove_theme_stylebox_override("normal")
+				b.remove_theme_color_override("font_color")
+
+
+var _star_big: ImageTexture
+
+
+func star_icon_big() -> ImageTexture:
+	if _star_big == null:
+		_star_big = StarRow.texture(44)
+	return _star_big
+
+
+func _send_survey() -> void:
+	if not survey_answers.has("rating"):
+		lbl_survey_err.text = "Zaznacz ocenę gwiazdkami (pytanie 1)"
+		return
+	for key in SURVEY_CHOICES:
+		if not survey_answers.has(key):
+			lbl_survey_err.text = "Odpowiedz na pytania 2–4"
+			return
+	var answers := survey_answers.duplicate()
+	answers["liked"] = txt_liked.text.strip_edges().left(1000)
+	answers["improve"] = txt_improve.text.strip_edges().left(1000)
+	survey_layer.visible = false
+	survey_submitted.emit(answers)
+
+
+func _build_survey_prompt() -> void:
+	prompt_layer = _overlay()
+	var v := _vbox(_panel(prompt_layer))
+	v.add_child(_title("Masz minutę?"))
+	var t := _label(26, COL_TEXT)
+	t.text = "Odpowiedz na 6 krótkich pytań o grę.\nKażda opinia pomaga ją ulepszyć."
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var yes := _button("Wypełnij ankietę", func(): show_survey())
+	yes.custom_minimum_size = Vector2(460, 100)
+	yes.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), COL_GREEN, 3))
+	v.add_child(yes)
+	var later := _button("Nie teraz", func(): prompt_layer.visible = false)
+	later.custom_minimum_size = Vector2(460, 90)
+	v.add_child(later)
+	var info := _label(20, COL_MUTED)
+	info.text = "Ankieta jest zawsze dostępna w menu."
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(info)
 
 
 func _build_busy() -> void:
