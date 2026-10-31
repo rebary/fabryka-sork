@@ -3,6 +3,7 @@ extends Node
 
 const NAMES := ["pick", "drop", "complete", "win", "click", "error", "hint", "reward"]
 const POOL := 6
+const VOLUME_DB := -6.0  # ogólna głośność efektów (0 = pełna, -6 = ok. połowa)
 
 var streams := {}
 var players: Array = []
@@ -14,6 +15,7 @@ func _ready() -> void:
 		streams[n] = load("res://assets/sfx/%s.wav" % n)
 	for i in POOL:
 		var p := AudioStreamPlayer.new()
+		p.volume_db = VOLUME_DB
 		add_child(p)
 		players.append(p)
 

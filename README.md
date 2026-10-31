@@ -15,6 +15,11 @@ Nazwa jest robocza. Przed publikacją sprawdź, czy nie jest zajęta w Google Pl
 2. **F5** (albo ▶). Okno ma proporcje telefonu.
 3. Kliknij paletę, z której robot ma wziąć paczki (podświetli się na niebiesko), a potem paletę docelową.
 
+## Wybór poziomu (tylko do testów)
+Przycisk **Poziom** (u góry) otwiera okno: wpisz numer zlecenia albo użyj „–”/„+” i naciśnij **Zatwierdź**. Wybrany poziom zapisuje się jako bieżący postęp.
+
+Przycisk jest widoczny tylko w edytorze i w wersjach testowych (debug). W wersji eksportowanej do sklepu (release) znika automatycznie.
+
 ## Zasady
 - Robot bierze z góry palety wszystkie widoczne paczki tego samego produktu, ile zmieści się na palecie docelowej.
 - Paczki stawia się na pustej palecie albo na tym samym produkcie.
@@ -62,7 +67,7 @@ Trudność jest **mierzona**: generator rozgrywa każdego kandydata na poziom ki
 | `scripts/main.gd` | Rysowanie hali i robota, dotyk, animacje, logika rozgrywki |
 | `scripts/hud.gd` | Przyciski, okna: sklep, wygrana, nowość, ładowanie |
 | `scripts/fx.gd` | Iskry, konfetti, unoszące się napisy |
-| `assets/sfx/*.wav` | Dźwięki (własne, syntetyczne) |
+| `assets/sfx/*.wav` | Dźwięki (własne, syntetyczne, łagodne). Głośność ogólna: `VOLUME_DB` w `scripts/sound.gd` |
 | `tools/make_sfx.py` | Generator dźwięków |
 | `tests/run_tests.gd` | Testy automatyczne |
 

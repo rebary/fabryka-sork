@@ -10,6 +10,7 @@ signal next_pressed
 signal sound_toggled
 signal buy_pressed(product_id: String)
 signal ad_pressed
+signal level_chosen(level: int)
 
 const COL_ACCENT := Color("#ffb627")
 const COL_PANEL := Color("#1d2229")
@@ -32,6 +33,9 @@ var intro_layer: Control
 var lbl_intro_title: Label
 var lbl_intro: Label
 var busy_layer: Control
+var level_layer: Control
+var level_edit: LineEdit
+var lbl_level_err: Label
 var lbl_busy: Label
 var msg_timer := 0.0
 
@@ -75,6 +79,19 @@ func _ready() -> void:
 	btn_sound.custom_minimum_size = Vector2(176, 60)
 	root.add_child(btn_sound)
 
+	# Okno wyboru poziomu - TYLKO DO TESTÓW. Przycisk widać w edytorze i w wersjach
+	# testowych (debug); w wersji wydawanej do sklepu (release) jest ukryty.
+	if OS.is_debug_build():
+		var btn_level := _button("Poziom", func(): show_level_picker(), 22)
+		btn_level.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+		btn_level.offset_left = -330
+		btn_level.offset_right = -212
+		btn_level.offset_top = 20
+		btn_level.offset_bottom = 80
+		btn_level.size_flags_horizontal = Control.SIZE_FILL
+		btn_level.custom_minimum_size = Vector2(118, 60)
+		root.add_child(btn_level)
+
 	var bar := HBoxContainer.new()
 	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
 	bar.offset_left = 20
@@ -92,6 +109,7 @@ func _ready() -> void:
 	_build_win(root)
 	_build_shop(root)
 	_build_intro(root)
+	_build_level_picker(root)
 	_build_busy(root)
 
 
@@ -166,7 +184,15 @@ func hide_busy() -> void:
 
 
 func is_modal_open() -> bool:
-	return win_layer.visible or shop_layer.visible or intro_layer.visible or busy_layer.visible
+	return win_layer.visible or shop_layer.visible or intro_layer.visible or busy_layer.visible or level_layer.visible
+
+
+func show_level_picker() -> void:
+	lbl_level_err.text = ""
+	level_edit.text = str(Save.level)
+	level_layer.visible = true
+	level_edit.grab_focus()
+	level_edit.select_all()
 
 
 # ---------------------------------------------------------------- budowa okien
@@ -227,6 +253,63 @@ func _build_intro(root: Control) -> void:
 	var ok := _button("Rozumiem", func(): intro_layer.visible = false)
 	ok.custom_minimum_size = Vector2(440, 100)
 	v.add_child(ok)
+
+
+func _build_level_picker(root: Control) -> void:
+	level_layer = _overlay(root)
+	var panel := _panel(level_layer)
+	var v := _vbox(panel)
+	var title := _label(36, COL_ACCENT)
+	title.text = "Wybór poziomu (test)"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(title)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 12)
+	v.add_child(row)
+	var minus := _button("–", func(): _step_level(-1), 40)
+	minus.custom_minimum_size = Vector2(96, 96)
+	minus.size_flags_horizontal = Control.SIZE_FILL
+	row.add_child(minus)
+	level_edit = LineEdit.new()
+	level_edit.custom_minimum_size = Vector2(240, 96)
+	level_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	level_edit.max_length = 4
+	level_edit.virtual_keyboard_type = LineEdit.KEYBOARD_TYPE_NUMBER
+	level_edit.add_theme_font_size_override("font_size", 40)
+	level_edit.text_submitted.connect(func(_t): _confirm_level())
+	row.add_child(level_edit)
+	var plus := _button("+", func(): _step_level(1), 40)
+	plus.custom_minimum_size = Vector2(96, 96)
+	plus.size_flags_horizontal = Control.SIZE_FILL
+	row.add_child(plus)
+	lbl_level_err = _label(22, Color("#ff6b6b"))
+	lbl_level_err.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(lbl_level_err)
+	var hint := _label(20, COL_MUTED)
+	hint.text = "Nowości: 18 folia • 23 limit ruchów • 28 palety na 5"
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(hint)
+	var ok := _button("Zatwierdź", func(): _confirm_level())
+	ok.custom_minimum_size = Vector2(460, 100)
+	ok.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), Color("#3ddc84"), 3))
+	v.add_child(ok)
+	var cancel := _button("Anuluj", func(): level_layer.visible = false)
+	cancel.custom_minimum_size = Vector2(460, 90)
+	v.add_child(cancel)
+
+
+func _step_level(delta: int) -> void:
+	var n := int(level_edit.text) if level_edit.text.is_valid_int() else 1
+	level_edit.text = str(clampi(n + delta, 1, 9999))
+
+
+func _confirm_level() -> void:
+	var t := level_edit.text.strip_edges()
+	if not t.is_valid_int() or int(t) < 1 or int(t) > 9999:
+		lbl_level_err.text = "Wpisz liczbę od 1 do 9999"
+		return
+	level_layer.visible = false
+	level_chosen.emit(int(t))
 
 
 func _build_busy(root: Control) -> void:

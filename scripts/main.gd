@@ -30,7 +30,7 @@ const COL_ROBOT := Color("#ff9f1c")
 const INTROS := {
 	"folia": ["Nowość: folia stretch", "Niektóre paczki są owinięte folią – nie widać, co jest w środku.\nPaczka odsłoni się, gdy znajdzie się na górze palety."],
 	"limit": ["Nowość: limit ruchów", "Zlecenie trzeba wykonać w podanej liczbie ruchów.\nCofnięcie zwraca ruch, więc zawsze możesz spróbować inaczej."],
-	"cap5": ["Nowość: palety na 5", "Na tych paletach mieszczą się 5 paczek.\nPaleta jest gotowa, gdy ma 5 paczek tego samego produktu."],
+	"cap5": ["Nowość: palety na 5", "Na tych paletach mieści się 5 paczek.\nPaleta jest gotowa, gdy ma 5 paczek tego samego produktu."],
 }
 
 var hud: CanvasLayer
@@ -80,6 +80,7 @@ func _ready() -> void:
 	hud.sound_toggled.connect(_on_sound_toggled)
 	hud.buy_pressed.connect(_on_buy)
 	hud.ad_pressed.connect(_on_ad)
+	hud.level_chosen.connect(_on_level_chosen)
 	Store.purchase_finished.connect(_on_purchase_finished)
 	Store.ad_finished.connect(_on_ad_finished)
 	get_viewport().size_changed.connect(_on_resize)
@@ -328,6 +329,15 @@ func _on_ad_finished(rewarded: bool) -> void:
 		Sfx.play("reward")
 		hud.show_msg("+1 podpowiedź", 3.0)
 		_update_hud()
+
+
+## Wybór poziomu z okna testowego: zlecenie staje się bieżącym postępem w zapisie.
+func _on_level_chosen(n: int) -> void:
+	if not anim.is_empty():
+		return
+	Save.level = n
+	Save.save()
+	_request_level(n)
 
 
 func _on_sound_toggled() -> void:
