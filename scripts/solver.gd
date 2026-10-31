@@ -11,8 +11,10 @@ extends RefCounted
 const UNLIMITED := 1 << 30
 
 
-static func solve(board: Board, max_nodes: int = 40000, max_depth: int = -1) -> Dictionary:
-	var ctx := {"visited": {}, "nodes": 0, "max": max_nodes, "path": []}
+## avoid = odciski stanów (Board.key), przez które rozwiązanie NIE może przechodzić
+## (np. układy, w których gracz już był - żeby podpowiedź nie kazała chodzić w kółko).
+static func solve(board: Board, max_nodes: int = 40000, max_depth: int = -1, avoid: Dictionary = {}) -> Dictionary:
+	var ctx := {"visited": {}, "nodes": 0, "max": max_nodes, "path": [], "avoid": avoid}
 	var depth := UNLIMITED if max_depth < 0 else max_depth
 	var ok := _dfs(board.clone(), depth, ctx)
 	return {"ok": ok, "moves": ctx["path"] if ok else []}
@@ -76,6 +78,8 @@ static func _dfs(b: Board, remaining: int, ctx: Dictionary) -> bool:
 		return false
 	var k := b.key()
 	if ctx["visited"].get(k, -1) >= remaining:
+		return false
+	if ctx.has("avoid") and ctx["avoid"].has(k) and not ctx["path"].is_empty():
 		return false
 	ctx["visited"][k] = remaining
 

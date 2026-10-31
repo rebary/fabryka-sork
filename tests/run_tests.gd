@@ -24,6 +24,7 @@ func _init() -> void:
 	test_intro_levels()
 	test_programs(30)
 	test_precomputed_data()
+	test_hints_no_loops(45)
 	test_generator(levels)
 	print("Sprawdzeń: %d, błędów: %d" % [checks, failures])
 	quit(1 if failures > 0 else 0)
@@ -196,6 +197,52 @@ func test_precomputed_data() -> void:
 			var d := LevelGenerator.program_from_data(n, data["programs"][n - 1])
 			var g := LevelGenerator.generate_program(n)
 			check(d.board.key() == g.board.key() and d.optimal == g.optimal, "program %d w pliku zgodny z generatorem" % n)
+
+
+## Gracz klikający tylko podpowiedzi musi ukończyć zlecenie bez wracania do tych samych układów
+## (błąd z zlecenia 18: podpowiedź kazała robić ruch tam i z powrotem w kółko).
+func test_hints_no_loops(levels: int) -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 99
+	for level in range(1, levels + 1):
+		var g := LevelGenerator.generate(level)
+		for scenario in ["same_podpowiedzi", "najpierw_wlasne_ruchy"]:
+			var b: Board = g.board.clone()
+			var hist: Array = []
+			if scenario == "najpierw_wlasne_ruchy":
+				for k in 3:
+					var opts: Array = []
+					for a in b.stacks.size():
+						for c in b.stacks.size():
+							if b.move_count(a, c) > 0:
+								opts.append([a, c])
+					if opts.is_empty():
+						break
+					hist.append(b.apply(opts[rng.randi_range(0, opts.size() - 1)]))
+			var seen := HintPlanner.visited_keys(b, hist)
+			seen[b.key()] = true
+			var planner := HintPlanner.new()
+			var hint_loops := 0
+			var undos := 0
+			for step in 400:
+				if b.is_solved():
+					break
+				var depth: int = g.move_limit - hist.size() if g.move_limit > 0 else -1
+				var h := planner.next_move(b, hist, depth)
+				if h.is_empty():
+					# Gra radzi wtedy cofnięcie - gracz cofa jeden ruch.
+					if hist.is_empty():
+						break
+					b.undo(hist.pop_back())
+					undos += 1
+					continue
+				hist.append(b.apply(h.move))
+				if seen.has(b.key()):
+					hint_loops += 1
+				seen[b.key()] = true
+			check(b.is_solved(), "zlecenie %d (%s): podpowiedzi prowadzą do celu" % [level, scenario])
+			check(hint_loops == 0, "zlecenie %d (%s): podpowiedź nie wraca do starych układów (%d)" % [level, scenario, hint_loops])
+			check(g.move_limit == 0 or hist.size() <= g.move_limit or undos > 0, "zlecenie %d (%s): w limicie ruchów" % [level, scenario])
 
 
 func test_generator(levels: int) -> void:

@@ -62,6 +62,7 @@ var par := 0
 var history: Array = []
 var dropped_moves := 0  # ruchy stracone przez upuszczenie paczki (nie da się ich cofnąć)
 var found_hint_this_level := false
+var hint_planner := HintPlanner.new()
 var max_progress := 0
 
 # Tryb programowania.
@@ -291,6 +292,7 @@ func _restart_level() -> void:
 
 func _reset_state() -> void:
 	history.clear()
+	hint_planner.reset()
 	dropped_moves = 0
 	selected = -1
 	anim = {}
@@ -578,7 +580,14 @@ func _program_hint() -> void:
 			hud.show_msg("Ten program już działa – naciśnij START (podpowiedź nie została zużyta)", 4.0)
 			return
 	var left: int = prog["max_steps"] - program.size()
-	var r := Solver.solve(sim, 40000, left)
+	var seen := {}
+	var replay := start_board.clone()
+	seen[replay.key()] = true
+	for st in program:
+		replay.do_move(st[0], st[1])
+		seen[replay.key()] = true
+	seen.erase(sim.key())
+	var r := Solver.solve(sim, 40000, left, seen)
 	if r.ok and not r.moves.is_empty():
 		Save.wallet.use()
 		var m: Array = r.moves[0]
@@ -620,10 +629,10 @@ func _on_hint() -> void:
 
 
 func _campaign_hint() -> void:
-	var r := Solver.solve(board, 40000, _limit_left() if move_limit > 0 else -1)
-	if r.ok and not r.moves.is_empty():
+	var h := hint_planner.next_move(board, history, _limit_left() if move_limit > 0 else -1)
+	if not h.is_empty():
 		Save.wallet.use()
-		var m: Array = r.moves[0]
+		var m: Array = h["move"]
 		if m[0] < 0:
 			hud.show_msg("Zmień chwytak na %s" % TOOL_NAMES.get(m[1], "inny"), HINT_TIME)
 		else:
