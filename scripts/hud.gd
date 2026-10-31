@@ -1,7 +1,7 @@
 extends CanvasLayer
-## Interfejs: napisy, przyciski, okno sklepu, ekran wygranej, plansza "nowość",
-## symulacja reklamy i ekran ładowania. Logika gry jest w main.gd - HUD tylko
-## wyświetla i wysyła sygnały po naciśnięciu przycisków.
+## Interfejs: napisy, przyciski, menu główne, rozbudowa hali, sklep, wygrana, nowości,
+## chwytaki, panel programu, wybór poziomu (test), ekran ładowania.
+## Logika gry jest w main.gd - HUD tylko wyświetla i wysyła sygnały.
 
 signal undo_pressed
 signal restart_pressed
@@ -11,37 +11,74 @@ signal sound_toggled
 signal buy_pressed(product_id: String)
 signal ad_pressed
 signal level_chosen(level: int)
+signal menu_pressed
+signal campaign_pressed
+signal program_mode_pressed
+signal decor_chosen(slot_id: String, item_id: String)
+signal tool_pressed(cap: int)
+signal prog_delete_pressed
+signal prog_clear_pressed
+signal prog_start_pressed
 
 const COL_ACCENT := Color("#ffb627")
 const COL_PANEL := Color("#1d2229")
 const COL_TEXT := Color("#eef2f6")
 const COL_MUTED := Color("#9aa5b1")
+const COL_GREEN := Color("#3ddc84")
+const COL_RED := Color("#ff6b6b")
+const MOD_NAMES := {"folia": "Folia stretch", "limit": "Limit ruchów", "cap5": "Palety na 5", "chwytaki": "Chwytaki"}
+const TOOL_NAMES := {-1: "Próżnia", 2: "Widły", 1: "Szczęki"}
+const TOOL_INFO := {-1: "cały ciąg", 2: "do 2 szt.", 1: "1 szt."}
 
+var root: Control
+var star_icon: ImageTexture
 var lbl_title: Label
 var lbl_info: Label
 var lbl_badges: Label
 var lbl_msg: Label
+var msg_timer := 0.0
+var program_mode := false
+# Pasek kampanii i chwytaków.
+var bar_campaign: HBoxContainer
 var btn_hint: Button
-var btn_sound: Button
+var bar_tools: HBoxContainer
+var tool_buttons := {}
+# Tryb programowania.
+var bar_program: HBoxContainer
+var btn_prog_start: Button
+var btn_prog_hint: Button
+var prog_chips: HFlowContainer
+# Okna.
 var win_layer: Control
 var win_panel: PanelContainer
 var lbl_win: Label
+var win_stars: StarRow
+var btn_win_next: Button
 var shop_layer: Control
 var lbl_shop_info: Label
 var shop_buttons := {}
 var intro_layer: Control
 var lbl_intro_title: Label
 var lbl_intro: Label
-var busy_layer: Control
 var level_layer: Control
+var level_title: Label
 var level_edit: LineEdit
 var lbl_level_err: Label
+var menu_layer: Control
+var btn_menu_campaign: Button
+var btn_menu_program: Button
+var btn_menu_decor: Button
+var btn_menu_sound: Button
+var decor_layer: Control
+var decor_list: VBoxContainer
+var lbl_decor_stars: Label
+var busy_layer: Control
 var lbl_busy: Label
-var msg_timer := 0.0
 
 
 func _ready() -> void:
-	var root := Control.new()
+	star_icon = StarRow.texture(30)
+	root = Control.new()
 	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	root.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	root.theme = _make_theme()
@@ -69,48 +106,61 @@ func _ready() -> void:
 	lbl_msg.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	root.add_child(lbl_msg)
 
-	btn_sound = _button("Dźwięk: wł.", func(): sound_toggled.emit(), 22)
-	btn_sound.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-	btn_sound.offset_left = -200
-	btn_sound.offset_right = -24
-	btn_sound.offset_top = 20
-	btn_sound.offset_bottom = 80
-	btn_sound.size_flags_horizontal = Control.SIZE_FILL
-	btn_sound.custom_minimum_size = Vector2(176, 60)
-	root.add_child(btn_sound)
-
-	# Okno wyboru poziomu - TYLKO DO TESTÓW. Przycisk widać w edytorze i w wersjach
-	# testowych (debug); w wersji wydawanej do sklepu (release) jest ukryty.
+	var btn_menu := _small_button("Menu", func(): menu_pressed.emit())
+	_place_top_right(btn_menu, -24, 130)
+	root.add_child(btn_menu)
+	# Wybór poziomu - TYLKO DO TESTÓW (ukryty w wersji wydawanej do sklepu).
 	if OS.is_debug_build():
-		var btn_level := _button("Poziom", func(): show_level_picker(), 22)
-		btn_level.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
-		btn_level.offset_left = -330
-		btn_level.offset_right = -212
-		btn_level.offset_top = 20
-		btn_level.offset_bottom = 80
-		btn_level.size_flags_horizontal = Control.SIZE_FILL
-		btn_level.custom_minimum_size = Vector2(118, 60)
+		var btn_level := _small_button("Poziom", func():
+			show_level_picker(Save.program if program_mode else Save.level, program_mode))
+		_place_top_right(btn_level, -168, 130)
 		root.add_child(btn_level)
 
-	var bar := HBoxContainer.new()
-	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	bar.offset_left = 20
-	bar.offset_right = -20
-	bar.offset_top = -132
-	bar.offset_bottom = -28
-	bar.add_theme_constant_override("separation", 14)
-	root.add_child(bar)
-	bar.add_child(_button("Cofnij", func(): undo_pressed.emit()))
-	bar.add_child(_button("Od nowa", func(): restart_pressed.emit()))
+	bar_campaign = _bottom_bar()
+	bar_campaign.add_child(_button("Cofnij", func(): undo_pressed.emit()))
+	bar_campaign.add_child(_button("Od nowa", func(): restart_pressed.emit()))
 	btn_hint = _button("Podpowiedź", func(): hint_pressed.emit())
 	btn_hint.add_theme_stylebox_override("normal", _box(Color("#3a3216"), COL_ACCENT, 3))
-	bar.add_child(btn_hint)
+	bar_campaign.add_child(btn_hint)
 
-	_build_win(root)
-	_build_shop(root)
-	_build_intro(root)
-	_build_level_picker(root)
-	_build_busy(root)
+	bar_tools = _bottom_bar()
+	bar_tools.offset_top = -240
+	bar_tools.offset_bottom = -146
+	for cap in [-1, 2, 1]:
+		var b := _button("", func(): tool_pressed.emit(cap), 22)
+		b.custom_minimum_size = Vector2(0, 90)
+		bar_tools.add_child(b)
+		tool_buttons[cap] = b
+	bar_tools.visible = false
+
+	bar_program = _bottom_bar()
+	bar_program.add_child(_button("Usuń\nkrok", func(): prog_delete_pressed.emit(), 22))
+	bar_program.add_child(_button("Wyczyść", func(): prog_clear_pressed.emit(), 22))
+	btn_prog_hint = _button("Podpowiedź", func(): hint_pressed.emit(), 22)
+	btn_prog_hint.add_theme_stylebox_override("normal", _box(Color("#3a3216"), COL_ACCENT, 3))
+	bar_program.add_child(btn_prog_hint)
+	btn_prog_start = _button("START", func(): prog_start_pressed.emit(), 28)
+	btn_prog_start.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), COL_GREEN, 3))
+	bar_program.add_child(btn_prog_start)
+	bar_program.visible = false
+	prog_chips = HFlowContainer.new()
+	prog_chips.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	prog_chips.offset_left = 20
+	prog_chips.offset_right = -20
+	prog_chips.offset_top = 128
+	prog_chips.add_theme_constant_override("h_separation", 8)
+	prog_chips.add_theme_constant_override("v_separation", 8)
+	prog_chips.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	prog_chips.visible = false
+	root.add_child(prog_chips)
+
+	_build_win()
+	_build_shop()
+	_build_intro()
+	_build_level_picker()
+	_build_decor()
+	_build_menu()
+	_build_busy()
 
 
 func _process(delta: float) -> void:
@@ -122,23 +172,85 @@ func _process(delta: float) -> void:
 
 # ---------------------------------------------------------------- API dla main.gd
 
-func set_status(level: int, moves: int, limit: int, mods: Array, hints: int, sound_on: bool) -> void:
+func set_mode(mode: String) -> void:
+	program_mode = mode == "program"
+	bar_campaign.visible = not program_mode
+	bar_program.visible = program_mode
+	prog_chips.visible = program_mode
+	lbl_msg.offset_top = 216 if program_mode else 128
+	if program_mode:
+		bar_tools.visible = false
+
+
+func set_status(level: int, moves: int, limit: int, mods: Array, hints: int) -> void:
 	lbl_title.text = "Zlecenie %d" % level
 	if limit > 0:
-		var left := limit - moves
 		lbl_info.text = "Ruchy: %d / %d" % [moves, limit]
-		lbl_info.add_theme_color_override("font_color", Color("#ff6b6b") if left <= 3 else COL_MUTED)
+		lbl_info.add_theme_color_override("font_color", COL_RED if limit - moves <= 3 else COL_MUTED)
 	else:
 		lbl_info.text = "Ruchy: %d" % moves
 		lbl_info.add_theme_color_override("font_color", COL_MUTED)
-	var names := {"folia": "Folia stretch", "limit": "Limit ruchów", "cap5": "Palety na 5"}
 	var b := PackedStringArray()
 	for m in mods:
-		b.append(names.get(m, m))
+		b.append(MOD_NAMES.get(m, m))
 	lbl_badges.text = "  •  ".join(b)
-	btn_hint.text = "Podpowiedź (%d)" % hints if hints > 0 else "Podpowiedź +"
-	btn_sound.text = "Dźwięk: wł." if sound_on else "Dźwięk: wył."
-	lbl_shop_info.text = "Masz podpowiedzi: %d" % hints
+	_set_hint_text(btn_hint, hints)
+
+
+func set_tools(tools: Array, current: int) -> void:
+	bar_tools.visible = not tools.is_empty()
+	for cap in tool_buttons:
+		var b: Button = tool_buttons[cap]
+		b.visible = tools.has(cap)
+		b.text = "%s\n%s" % [TOOL_NAMES[cap], TOOL_INFO[cap]]
+		if cap == current:
+			b.add_theme_stylebox_override("normal", _box(Color("#1f4a5c"), Color("#4fd1ff"), 4))
+			b.add_theme_color_override("font_color", Color("#4fd1ff"))
+		else:
+			b.remove_theme_stylebox_override("normal")
+			b.remove_theme_color_override("font_color")
+
+
+## program = lista kroków [from, to]; active = wykonywany krok (-1 = brak);
+## error_step = krok z błędem (-1 = brak); state: "edit", "run", "fault", "fail".
+func set_program_status(number: int, program: Array, max_steps: int, optimal: int, active: int, error_step: int, state: String, hints: int) -> void:
+	lbl_title.text = "Program %d" % number
+	lbl_info.text = "Kroki: %d / %d" % [program.size(), max_steps]
+	lbl_info.add_theme_color_override("font_color", COL_MUTED)
+	lbl_badges.text = "Najkrótszy: %d" % optimal
+	for c in prog_chips.get_children():
+		c.queue_free()
+	for i in program.size():
+		var chip := PanelContainer.new()
+		var col := Color("#323a45")
+		var border := Color("#59636f")
+		if i == error_step:
+			col = Color("#5c1f24")
+			border = COL_RED
+		elif i == active:
+			col = Color("#1f4a5c")
+			border = Color("#4fd1ff")
+		elif active >= 0 and i < active:
+			border = COL_GREEN
+		var sb := _box(col, border, 2)
+		sb.content_margin_left = 10
+		sb.content_margin_right = 10
+		sb.content_margin_top = 2
+		sb.content_margin_bottom = 2
+		chip.add_theme_stylebox_override("panel", sb)
+		chip.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		var l := _label(22, COL_TEXT)
+		l.text = "%d: %d » %d" % [i + 1, program[i][0] + 1, program[i][1] + 1]
+		chip.add_child(l)
+		prog_chips.add_child(chip)
+	if program.is_empty() and state == "edit":
+		var l := _label(22, COL_MUTED)
+		l.text = "Dotknij palety źródłowej, potem docelowej – tak dodajesz krok."
+		prog_chips.add_child(l)
+	for b in bar_program.get_children():
+		b.disabled = state == "run"
+	btn_prog_start.text = "Edytuj" if state in ["fault", "fail"] else "START"
+	_set_hint_text(btn_prog_hint, hints)
 
 
 func show_msg(text: String, seconds: float = 3.0) -> void:
@@ -146,8 +258,10 @@ func show_msg(text: String, seconds: float = 3.0) -> void:
 	msg_timer = seconds
 
 
-func show_win(text: String) -> void:
+func show_win(text: String, stars: int, next_label: String) -> void:
 	lbl_win.text = text
+	win_stars.set_stars(stars, true)
+	btn_win_next.text = next_label
 	win_layer.visible = true
 	win_layer.modulate.a = 0.0
 	await get_tree().process_frame
@@ -165,6 +279,7 @@ func hide_win() -> void:
 func show_shop() -> void:
 	for id in shop_buttons:
 		shop_buttons[id].text = "%s – %s" % [Store.PRODUCTS[id]["title"], Store.price_text(id)]
+	lbl_shop_info.text = "Masz podpowiedzi: %d" % Save.wallet.hints
 	shop_layer.visible = true
 
 
@@ -183,41 +298,66 @@ func hide_busy() -> void:
 	busy_layer.visible = false
 
 
-func is_modal_open() -> bool:
-	return win_layer.visible or shop_layer.visible or intro_layer.visible or busy_layer.visible or level_layer.visible
+func show_menu() -> void:
+	btn_menu_campaign.text = "Kampania – zlecenie %d" % Save.level
+	btn_menu_program.text = "Programowanie robota – program %d" % Save.program
+	btn_menu_decor.text = "Rozbudowa hali – %d" % Save.stars_available()
+	btn_menu_sound.text = "Dźwięk: wł." if Save.sound_on else "Dźwięk: wył."
+	menu_layer.visible = true
 
 
-func show_level_picker() -> void:
+func hide_menu() -> void:
+	menu_layer.visible = false
+
+
+func show_level_picker(current: int, for_program: bool = false) -> void:
+	level_title.text = "Wybór programu (test)" if for_program else "Wybór poziomu (test)"
 	lbl_level_err.text = ""
-	level_edit.text = str(Save.level)
+	level_edit.text = str(current)
 	level_layer.visible = true
 	level_edit.grab_focus()
 	level_edit.select_all()
 
 
+func show_decor() -> void:
+	menu_layer.visible = false
+	refresh_decor()
+	decor_layer.visible = true
+
+
+func is_modal_open() -> bool:
+	for l in [win_layer, shop_layer, intro_layer, busy_layer, level_layer, menu_layer, decor_layer]:
+		if l.visible:
+			return true
+	return false
+
+
 # ---------------------------------------------------------------- budowa okien
 
-func _build_win(root: Control) -> void:
-	win_layer = _overlay(root)
+func _build_win() -> void:
+	win_layer = _overlay()
 	win_panel = _panel(win_layer)
 	var v := _vbox(win_panel)
-	lbl_win = _label(40, COL_TEXT)
+	lbl_win = _label(38, COL_TEXT)
 	lbl_win.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_win)
-	var next := _button("Następne zlecenie", func(): next_pressed.emit())
-	next.custom_minimum_size = Vector2(440, 110)
-	next.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), Color("#3ddc84"), 3))
-	v.add_child(next)
+	win_stars = StarRow.new(64)
+	v.add_child(win_stars)
+	btn_win_next = _button("Dalej", func(): next_pressed.emit())
+	btn_win_next.custom_minimum_size = Vector2(460, 110)
+	btn_win_next.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), COL_GREEN, 3))
+	v.add_child(btn_win_next)
+	var menu := _button("Menu", func():
+		win_layer.visible = false
+		menu_pressed.emit())
+	menu.custom_minimum_size = Vector2(460, 90)
+	v.add_child(menu)
 
 
-func _build_shop(root: Control) -> void:
-	shop_layer = _overlay(root)
-	var panel := _panel(shop_layer)
-	var v := _vbox(panel)
-	var title := _label(40, COL_TEXT)
-	title.text = "Podpowiedzi"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(title)
+func _build_shop() -> void:
+	shop_layer = _overlay()
+	var v := _vbox(_panel(shop_layer))
+	v.add_child(_title("Podpowiedzi"))
 	lbl_shop_info = _label(26, COL_MUTED)
 	lbl_shop_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_shop_info)
@@ -238,31 +378,28 @@ func _build_shop(root: Control) -> void:
 	v.add_child(close)
 
 
-func _build_intro(root: Control) -> void:
-	intro_layer = _overlay(root)
-	var panel := _panel(intro_layer)
-	var v := _vbox(panel)
+func _build_intro() -> void:
+	intro_layer = _overlay()
+	var v := _vbox(_panel(intro_layer))
 	lbl_intro_title = _label(38, COL_ACCENT)
 	lbl_intro_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_intro_title)
 	lbl_intro = _label(28, COL_TEXT)
 	lbl_intro.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_intro.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	lbl_intro.custom_minimum_size = Vector2(500, 0)
+	lbl_intro.custom_minimum_size = Vector2(520, 0)
 	v.add_child(lbl_intro)
 	var ok := _button("Rozumiem", func(): intro_layer.visible = false)
 	ok.custom_minimum_size = Vector2(440, 100)
 	v.add_child(ok)
 
 
-func _build_level_picker(root: Control) -> void:
-	level_layer = _overlay(root)
-	var panel := _panel(level_layer)
-	var v := _vbox(panel)
-	var title := _label(36, COL_ACCENT)
-	title.text = "Wybór poziomu (test)"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	v.add_child(title)
+func _build_level_picker() -> void:
+	level_layer = _overlay()
+	var v := _vbox(_panel(level_layer))
+	level_title = _title("Wybór poziomu (test)")
+	level_title.add_theme_color_override("font_color", COL_ACCENT)
+	v.add_child(level_title)
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 12)
 	v.add_child(row)
@@ -282,16 +419,16 @@ func _build_level_picker(root: Control) -> void:
 	plus.custom_minimum_size = Vector2(96, 96)
 	plus.size_flags_horizontal = Control.SIZE_FILL
 	row.add_child(plus)
-	lbl_level_err = _label(22, Color("#ff6b6b"))
+	lbl_level_err = _label(22, COL_RED)
 	lbl_level_err.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_level_err)
 	var hint := _label(20, COL_MUTED)
-	hint.text = "Nowości: 18 folia • 23 limit ruchów • 28 palety na 5"
+	hint.text = "Nowości: 18 folia • 23 limit • 28 palety na 5 • 33 chwytaki"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(hint)
 	var ok := _button("Zatwierdź", func(): _confirm_level())
 	ok.custom_minimum_size = Vector2(460, 100)
-	ok.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), Color("#3ddc84"), 3))
+	ok.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), COL_GREEN, 3))
 	v.add_child(ok)
 	var cancel := _button("Anuluj", func(): level_layer.visible = false)
 	cancel.custom_minimum_size = Vector2(460, 90)
@@ -312,10 +449,109 @@ func _confirm_level() -> void:
 	level_chosen.emit(int(t))
 
 
-func _build_busy(root: Control) -> void:
-	busy_layer = _overlay(root)
-	var panel := _panel(busy_layer)
-	var v := _vbox(panel)
+func _build_menu() -> void:
+	menu_layer = _overlay()
+	(menu_layer as ColorRect).color = Color(0.06, 0.07, 0.09, 0.94)
+	var v := _vbox(_panel(menu_layer))
+	var t := _label(52, COL_ACCENT)
+	t.text = "Fabryka Sort"
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	var sub := _label(22, COL_MUTED)
+	sub.text = "Robot, palety i porządek na hali"
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(sub)
+	btn_menu_campaign = _menu_button(func(): campaign_pressed.emit())
+	btn_menu_campaign.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), COL_GREEN, 3))
+	v.add_child(btn_menu_campaign)
+	btn_menu_program = _menu_button(func(): program_mode_pressed.emit())
+	btn_menu_program.add_theme_stylebox_override("normal", _box(Color("#1f4a5c"), Color("#4fd1ff"), 3))
+	v.add_child(btn_menu_program)
+	btn_menu_decor = _menu_button(func(): show_decor())
+	btn_menu_decor.icon = star_icon
+	btn_menu_decor.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	v.add_child(btn_menu_decor)
+	btn_menu_sound = _menu_button(func():
+		sound_toggled.emit()
+		btn_menu_sound.text = "Dźwięk: wł." if Save.sound_on else "Dźwięk: wył.")
+	btn_menu_sound.custom_minimum_size = Vector2(560, 80)
+	v.add_child(btn_menu_sound)
+
+
+func _menu_button(cb: Callable) -> Button:
+	var b := _button("", cb, 26)
+	b.custom_minimum_size = Vector2(560, 100)
+	return b
+
+
+func _build_decor() -> void:
+	decor_layer = _overlay()
+	(decor_layer as ColorRect).color = Color(0.03, 0.04, 0.06, 0.45)
+	var v := _vbox(_panel(decor_layer))
+	v.add_theme_constant_override("separation", 12)
+	v.add_child(_title("Rozbudowa hali"))
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_CENTER
+	lbl_decor_stars = _label(28, Color("#ffc93c"))
+	row.add_child(lbl_decor_stars)
+	var icon := TextureRect.new()
+	icon.texture = star_icon
+	icon.stretch_mode = TextureRect.STRETCH_KEEP_CENTERED
+	row.add_child(icon)
+	v.add_child(row)
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(560, 640)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	v.add_child(scroll)
+	decor_list = VBoxContainer.new()
+	decor_list.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	decor_list.add_theme_constant_override("separation", 8)
+	scroll.add_child(decor_list)
+	var note := _label(20, COL_MUTED)
+	note.text = "Gwiazdki zdobywasz w zleceniach i programach.\nOzdoby zmieniają tylko wygląd hali."
+	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(note)
+	var close := _button("Zamknij", func():
+		decor_layer.visible = false
+		show_menu())
+	close.custom_minimum_size = Vector2(560, 90)
+	v.add_child(close)
+
+
+func refresh_decor() -> void:
+	lbl_decor_stars.text = "Dostępne gwiazdki: %d " % Save.stars_available()
+	for c in decor_list.get_children():
+		c.queue_free()
+	for s in Decor.SLOTS:
+		var head := _label(26, COL_ACCENT)
+		head.text = s["name"]
+		decor_list.add_child(head)
+		for it in s["items"]:
+			var selected: bool = Save.decor_of(s["id"]) == it["id"]
+			var owned: bool = Save.owns(it["id"])
+			var text: String = it["name"]
+			if selected:
+				text += " – wybrane"
+			elif owned:
+				text += " – wybierz"
+			else:
+				text += " – %d" % it["price"]
+			var slot_id: String = s["id"]
+			var item_id: String = it["id"]
+			var b := _button(text, func(): decor_chosen.emit(slot_id, item_id), 24)
+			b.custom_minimum_size = Vector2(0, 76)
+			if not owned:
+				b.icon = star_icon
+				b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+				b.disabled = Save.stars_available() < int(it["price"])
+			if selected:
+				b.add_theme_stylebox_override("normal", _box(Color("#1f4a5c"), Color("#4fd1ff"), 3))
+			decor_list.add_child(b)
+
+
+func _build_busy() -> void:
+	busy_layer = _overlay()
+	var v := _vbox(_panel(busy_layer))
 	lbl_busy = _label(32, COL_TEXT)
 	lbl_busy.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	lbl_busy.custom_minimum_size = Vector2(440, 0)
@@ -324,7 +560,38 @@ func _build_busy(root: Control) -> void:
 
 # ---------------------------------------------------------------- pomocnicze
 
-func _overlay(root: Control) -> Control:
+func _set_hint_text(b: Button, hints: int) -> void:
+	b.text = "Podpowiedź (%d)" % hints if hints > 0 else "Podpowiedź +"
+
+
+func _bottom_bar() -> HBoxContainer:
+	var bar := HBoxContainer.new()
+	bar.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	bar.offset_left = 20
+	bar.offset_right = -20
+	bar.offset_top = -132
+	bar.offset_bottom = -28
+	bar.add_theme_constant_override("separation", 12)
+	root.add_child(bar)
+	return bar
+
+
+func _place_top_right(b: Control, right: float, width: float) -> void:
+	b.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	b.offset_right = right
+	b.offset_left = right - width
+	b.offset_top = 20
+	b.offset_bottom = 80
+
+
+func _small_button(text: String, cb: Callable) -> Button:
+	var b := _button(text, cb, 22)
+	b.size_flags_horizontal = Control.SIZE_FILL
+	b.custom_minimum_size = Vector2(0, 60)
+	return b
+
+
+func _overlay() -> Control:
 	var layer := ColorRect.new()
 	layer.color = Color(0.03, 0.04, 0.06, 0.78)
 	layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -340,10 +607,10 @@ func _overlay(root: Control) -> Control:
 func _panel(layer: Control) -> PanelContainer:
 	var panel := PanelContainer.new()
 	var sb := _box(COL_PANEL, COL_ACCENT, 4)
-	sb.content_margin_left = 36
-	sb.content_margin_right = 36
-	sb.content_margin_top = 32
-	sb.content_margin_bottom = 32
+	sb.content_margin_left = 32
+	sb.content_margin_right = 32
+	sb.content_margin_top = 28
+	sb.content_margin_bottom = 28
 	sb.shadow_size = 18
 	sb.shadow_color = Color(0, 0, 0, 0.5)
 	panel.add_theme_stylebox_override("panel", sb)
@@ -353,10 +620,17 @@ func _panel(layer: Control) -> PanelContainer:
 
 func _vbox(parent: Control) -> VBoxContainer:
 	var v := VBoxContainer.new()
-	v.add_theme_constant_override("separation", 22)
+	v.add_theme_constant_override("separation", 20)
 	v.alignment = BoxContainer.ALIGNMENT_CENTER
 	parent.add_child(v)
 	return v
+
+
+func _title(text: String) -> Label:
+	var l := _label(40, COL_TEXT)
+	l.text = text
+	l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	return l
 
 
 func _label(size: int, col: Color) -> Label:
@@ -395,11 +669,14 @@ func _make_theme() -> Theme:
 	hover.border_width_bottom = 6
 	var pressed := _box(Color("#272d35"), COL_ACCENT, 2)
 	pressed.border_width_top = 6
+	var disabled := _box(Color("#262b32"), Color("#3a414b"), 2)
 	th.set_stylebox("normal", "Button", normal)
 	th.set_stylebox("hover", "Button", hover)
 	th.set_stylebox("pressed", "Button", pressed)
+	th.set_stylebox("disabled", "Button", disabled)
 	th.set_stylebox("focus", "Button", StyleBoxEmpty.new())
 	th.set_color("font_color", "Button", COL_TEXT)
 	th.set_color("font_hover_color", "Button", Color.WHITE)
 	th.set_color("font_pressed_color", "Button", COL_ACCENT)
+	th.set_color("font_disabled_color", "Button", Color("#6b7380"))
 	return th

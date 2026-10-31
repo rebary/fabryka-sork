@@ -1,17 +1,16 @@
 class_name Solver
 extends RefCounted
-## Szuka rozwiązania planszy (przeszukiwanie w głąb z pamięcią odwiedzonych stanów).
-## Zastosowania: sprawdzenie, czy poziom da się ułożyć, wyznaczenie limitu ruchów
-## i podpowiedź dla gracza. Solver zna zawartość paczek w folii.
-## Rozwiązanie NIE musi być najkrótsze, ale kolejność ruchów (najpierw "dokładanie"
-## do tego samego produktu) zwykle daje krótkie rozwiązania.
+## Szukanie rozwiązań planszy.
+##  - solve():         przeszukiwanie w głąb - szybko znajduje JAKIEŚ rozwiązanie
+##                     (sprawdzanie poziomów, podpowiedzi);
+##  - solve_short():   próbuje skrócić znalezione rozwiązanie (wzorzec na 3 gwiazdki);
+##  - solve_optimal(): przeszukiwanie wszerz - NAJKRÓTSZE rozwiązanie (małe plansze,
+##                     tryb programowania).
+## Ruch to [from, to] albo [-1, chwytak] (zmiana chwytaka). Solver zna zawartość folii.
 
 const UNLIMITED := 1 << 30
 
 
-## Zwraca {"ok": bool, "moves": Array of [from, to]}.
-## max_depth = maksymalna liczba ruchów (-1 = bez limitu).
-## ok = false: brak rozwiązania ALBO przekroczony limit węzłów (max_nodes).
 static func solve(board: Board, max_nodes: int = 40000, max_depth: int = -1) -> Dictionary:
 	var ctx := {"visited": {}, "nodes": 0, "max": max_nodes, "path": []}
 	var depth := UNLIMITED if max_depth < 0 else max_depth
@@ -19,7 +18,6 @@ static func solve(board: Board, max_nodes: int = 40000, max_depth: int = -1) -> 
 	return {"ok": ok, "moves": ctx["path"] if ok else []}
 
 
-## Szuka możliwie krótkiego rozwiązania: najpierw dowolne, potem próbuje krótszych.
 static func solve_short(board: Board, max_nodes: int = 40000) -> Dictionary:
 	var best := solve(board, max_nodes)
 	if not best.ok:
@@ -35,6 +33,39 @@ static func solve_short(board: Board, max_nodes: int = 40000) -> Dictionary:
 	return best
 
 
+## Najkrótsze rozwiązanie (BFS). ok = false: brak albo przekroczony limit stanów.
+static func solve_optimal(board: Board, max_states: int = 60000) -> Dictionary:
+	var start := board.clone()
+	if start.is_solved():
+		return {"ok": true, "moves": []}
+	var start_key := start.key()
+	var parents := {start_key: null}
+	var queue: Array = [[start, start_key]]
+	var head := 0
+	while head < queue.size():
+		var b: Board = queue[head][0]
+		var k: String = queue[head][1]
+		head += 1
+		for m in _ordered_moves(b):
+			var nb := b.clone()
+			nb.apply(m)
+			var nk := nb.key()
+			if parents.has(nk):
+				continue
+			parents[nk] = [k, m]
+			if nb.is_solved():
+				var moves: Array = []
+				var cur := nk
+				while parents[cur] != null:
+					moves.push_front(parents[cur][1])
+					cur = parents[cur][0]
+				return {"ok": true, "moves": moves}
+			if parents.size() > max_states:
+				return {"ok": false, "moves": []}
+			queue.append([nb, nk])
+	return {"ok": false, "moves": []}
+
+
 static func _dfs(b: Board, remaining: int, ctx: Dictionary) -> bool:
 	if b.is_solved():
 		return true
@@ -44,14 +75,13 @@ static func _dfs(b: Board, remaining: int, ctx: Dictionary) -> bool:
 	if ctx["nodes"] > ctx["max"]:
 		return false
 	var k := b.key()
-	# Pomijamy stan, który już badaliśmy z co najmniej takim samym zapasem ruchów.
 	if ctx["visited"].get(k, -1) >= remaining:
 		return false
 	ctx["visited"][k] = remaining
 
 	for m in _ordered_moves(b):
-		var rec := b.do_move(m[0], m[1])
-		ctx["path"].append([m[0], m[1]])
+		var rec := b.apply(m)
+		ctx["path"].append(m)
 		if _dfs(b, remaining - 1, ctx):
 			return true
 		ctx["path"].pop_back()
@@ -59,7 +89,8 @@ static func _dfs(b: Board, remaining: int, ctx: Dictionary) -> bool:
 	return false
 
 
-## Sensowne ruchy, posortowane od najbardziej obiecujących.
+## Sensowne ruchy, od najbardziej obiecujących: dokładanie do tego samego produktu,
+## potem ruchy na pustą paletę, na końcu zmiany chwytaka.
 static func _ordered_moves(b: Board) -> Array:
 	var good: Array = []
 	var to_empty: Array = []
@@ -70,15 +101,20 @@ static func _ordered_moves(b: Board) -> Array:
 		var uniform: bool = b.top_run(from) == src.size()
 		var tried_empty := false
 		for to in b.stacks.size():
-			if not b.can_move(from, to):
+			var n := b.move_count(from, to)
+			if n == 0:
 				continue
 			if b.stacks[to].is_empty():
-				# Przenoszenie jednolitej palety na pustą nic nie daje,
+				# Przeniesienie CAŁEJ jednolitej palety na pustą nic nie daje,
 				# a wszystkie puste palety są równoważne.
-				if uniform or tried_empty:
+				if tried_empty or (uniform and n == src.size()):
 					continue
 				tried_empty = true
 				to_empty.append([from, to])
 			else:
 				good.append([from, to])
-	return good + to_empty
+	var tool_moves: Array = []
+	for cap in b.tools:
+		if cap != b.tool_cap:
+			tool_moves.append([-1, cap])
+	return good + to_empty + tool_moves

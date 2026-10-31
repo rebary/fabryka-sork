@@ -15,6 +15,17 @@ Nazwa jest robocza. Przed publikacją sprawdź, czy nie jest zajęta w Google Pl
 2. **F5** (albo ▶). Okno ma proporcje telefonu.
 3. Kliknij paletę, z której robot ma wziąć paczki (podświetli się na niebiesko), a potem paletę docelową.
 
+## Tryby gry
+Po uruchomieniu pojawia się **menu główne**:
+- **Kampania** – zlecenia, gracz steruje robotem ruch po ruchu.
+- **Programowanie robota** – osobny tryb. Gracz układa program (listę kroków „paleta » paleta”), a dopiero potem naciska **START**. W trakcie programowania plansza się nie zmienia, więc skutki kroków trzeba przewidzieć. Błędny krok zatrzymuje robota komunikatem „BŁĄD PROGRAMU” i wskazuje przyczynę; „Edytuj” wraca do edycji. Palety mieszczą po 3 paczki, a każdy program ma znane najkrótsze rozwiązanie i limit kroków.
+- **Rozbudowa hali** – ozdoby kupowane za gwiazdki: kolor robota, ściana, posadzka, oświetlenie, zegar lub tablica wyników, zieleń, ramię robota w tle. Ozdoby zmieniają tylko wygląd i nie są sprzedawane za pieniądze.
+
+## Gwiazdki
+- **Kampania:** 3 gwiazdki za wynik nie gorszy niż wzorzec ruchów (pokazywany po wygranej), 2 za wynik blisko wzorca, 1 za resztę. Zmiana chwytaka liczy się jako ruch.
+- **Programy:** 3 gwiazdki za najkrótszy program, 2 za o jeden krok dłuższy, 1 za resztę.
+- Poprawienie wyniku dodaje brakujące gwiazdki.
+
 ## Wybór poziomu (tylko do testów)
 Przycisk **Poziom** (u góry) otwiera okno: wpisz numer zlecenia albo użyj „–”/„+” i naciśnij **Zatwierdź**. Wybrany poziom zapisuje się jako bieżący postęp.
 
@@ -34,7 +45,8 @@ Przycisk jest widoczny tylko w edytorze i w wersjach testowych (debug). W wersji
 | 18 | Nowość: **folia stretch** – paczki owinięte folią są ukryte, dopóki nie trafią na górę palety |
 | 23 | Nowość: **limit ruchów** – cofnięcie zwraca ruch |
 | 28 | Nowość: **palety na 5** paczek |
-| 29+ | Utrudnienia na przemian (folia, limit, palety na 5), co 4. zlecenie para utrudnień |
+| 33 | Nowość: **wymiana chwytaków** – próżnia (cały ciąg albo nic), widły (do 2), szczęki (1). Zmiana kosztuje ruch |
+| 36+ | Utrudnienia na przemian, czasem dwa naraz, czasem zlecenie bez utrudnień |
 | co 5. (od 10.) | Zlecenie „przerwa”: łatwiejsze, bez utrudnień |
 
 Przy pierwszym wystąpieniu nowości gra pokazuje krótką planszę z wyjaśnieniem. Natężenie (ile paczek w folii, jak ciasny limit) rośnie powoli do ok. 90. zlecenia.
@@ -61,6 +73,11 @@ Trudność jest **mierzona**: generator rozgrywa każdego kandydata na poziom ki
 | `scripts/solver.gd` | Szukanie rozwiązania: sprawdzanie poziomów, limit ruchów, podpowiedzi |
 | `scripts/level_generator.gd` | Zlecenia, krzywa trudności, utrudnienia |
 | `scripts/hint_wallet.gd` | Licznik podpowiedzi i nagrody |
+| `scripts/decor.gd` | Katalog ozdób hali (nazwy, ceny w gwiazdkach) |
+| `scripts/star_row.gd` | Gwiazdki rysowane kodem |
+| `scripts/levels.gd` | Autoload `Levels` – wczytuje gotowe poziomy z `data/levels.json` |
+| `data/levels.json` | Zlecenia 1–150 i programy 1–60 wyliczone z góry |
+| `tools/precompute_levels.gd` | Narzędzie do ponownego wyliczenia `data/levels.json` |
 | `scripts/save_data.gd` | Autoload `Save` – zapis postępu i ustawień |
 | `scripts/store.gd` | Autoload `Store` – sklep i reklamy (tryb testowy) |
 | `scripts/sound.gd` | Autoload `Sfx` – efekty dźwiękowe |
@@ -71,7 +88,13 @@ Trudność jest **mierzona**: generator rozgrywa każdego kandydata na poziom ki
 | `tools/make_sfx.py` | Generator dźwięków |
 | `tests/run_tests.gd` | Testy automatyczne |
 
-Zlecenia liczą się **w tle** (osobny wątek): następne przygotowuje się, gdy gracz rozwiązuje bieżące. Przygotowanie trudnego zlecenia trwało do ok. 3 s na serwerze testowym. Na słabym telefonie może trwać dłużej, wtedy pokaże się „Przygotowuję zlecenie…”.
+**Gotowe poziomy:** zlecenia 1–150 i programy 1–60 są wyliczone z góry i zapisane w `data/levels.json`, więc telefon nie musi ich liczyć. **Po każdej zmianie w `level_generator.gd` uruchom ponownie:**
+```bash
+godot --headless --script res://tools/precompute_levels.gd -- --campaign=150 --programs=60
+```
+Test automatyczny wykrywa, gdy plik nie zgadza się z generatorem.
+
+Dalsze zlecenia liczą się **w tle** (osobny wątek): następne przygotowuje się, gdy gracz rozwiązuje bieżące. Przygotowanie trudnego zlecenia trwało do ok. 3 s na serwerze testowym. Na słabym telefonie może trwać dłużej, wtedy pokaże się „Przygotowuję zlecenie…”.
 
 ## Testy automatyczne
 W folderze projektu (`godot` = ścieżka do programu Godot):

@@ -14,6 +14,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 Save="*res://scripts/save_data.gd"
 Store="*res://scripts/store.gd"
 Sfx="*res://scripts/sound.gd"
+Levels="*res://scripts/levels.gd"
 
 [display]
 
