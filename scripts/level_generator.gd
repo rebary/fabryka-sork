@@ -5,9 +5,10 @@ extends RefCounted
 ##
 ## KRZYWA TRUDNOŚCI KAMPANII (wszystkie liczby można stroić w tym pliku):
 ##  - zlecenia 1-15: rośnie liczba produktów (3 -> 8), bez utrudnień;
-##  - nowości pojawiają się stopniowo: folia (18), limit ruchów (23), palety na 5 (28),
-##    wymiana chwytaków (33), śliskie paczki (41);
-##  - potem utrudnienia występują na przemian, czasem po dwa naraz;
+##  - nowości pojawiają się od NAJLŻEJSZEJ do NAJCIĘŻSZEJ (pomiar: tools/analyze_modifiers.gd):
+##    palety na 5 (18), chwytaki (23), śliskie paczki (28), limit ruchów (33), folia (41);
+##  - potem utrudnienia występują na przemian - lżejsze częściej, folia rzadziej
+##    i z rosnącym odsetkiem owiniętych paczek; pary z folią dopiero w późnych zleceniach;
 ##  - co 5. zlecenie (od 10.) jest "przerwą": łatwiejsze, bez utrudnień;
 ##  - z kilku losowych kandydatów wybieramy ten o trudności najbliższej celowi.
 
@@ -16,10 +17,14 @@ const MOD_LIMIT := "limit"
 const MOD_CAP5 := "cap5"
 const MOD_GRIP := "chwytaki"
 const MOD_DROP := "upadki"
-const ALL_MODS := [MOD_WRAP, MOD_LIMIT, MOD_CAP5, MOD_GRIP, MOD_DROP]
-const INTRO_LEVEL := {MOD_WRAP: 18, MOD_LIMIT: 23, MOD_CAP5: 28, MOD_GRIP: 33, MOD_DROP: 41}
-const PAIRS := [[MOD_WRAP, MOD_LIMIT], [MOD_CAP5, MOD_WRAP], [MOD_CAP5, MOD_LIMIT], [MOD_GRIP, MOD_LIMIT],
-	[MOD_GRIP, MOD_WRAP], [MOD_DROP, MOD_WRAP], [MOD_DROP, MOD_CAP5], [MOD_DROP, MOD_GRIP]]
+## Hierarchia od najlżejszego do najcięższego (wyniki pomiaru w docs/06_HIERARCHIA_UTRUDNIEN.md).
+const ALL_MODS := [MOD_CAP5, MOD_GRIP, MOD_DROP, MOD_LIMIT, MOD_WRAP]
+const INTRO_LEVEL := {MOD_CAP5: 18, MOD_GRIP: 23, MOD_DROP: 28, MOD_LIMIT: 33, MOD_WRAP: 41}
+## Cykl fazy pełnej (liczone tylko zlecenia, które nie są przerwą): lżejsze utrudnienia częściej.
+const CYCLE := [MOD_CAP5, MOD_GRIP, MOD_LIMIT, "para", MOD_GRIP, MOD_DROP, MOD_CAP5, MOD_LIMIT, MOD_WRAP, ""]
+const PAIRS_EARLY := [[MOD_CAP5, MOD_GRIP], [MOD_DROP, MOD_GRIP], [MOD_LIMIT, MOD_CAP5], [MOD_LIMIT, MOD_GRIP], [MOD_DROP, MOD_CAP5]]
+const PAIRS_WRAP := [[MOD_WRAP, MOD_CAP5], [MOD_WRAP, MOD_GRIP]]  # od zlecenia 80
+const PAIR_HARDEST := [MOD_WRAP, MOD_LIMIT]  # od zlecenia 110 (najcięższe połączenie)
 ## Szansa, że paczka wyślizgnie się z chwytaka (utrudnienie "śliskie paczki").
 const DROP_CHANCE := 0.04
 const GRIP_TOOLS := [Board.TOOL_VACUUM, 2, 1]
@@ -51,7 +56,8 @@ static func params_for_level(level: int) -> Dictionary:
 
 	var t := clampf((level - 16) / 75.0, 0.0, 1.0)
 	p["target"] = lerpf(0.35, 0.75, t)
-	p["wrap_fraction"] = lerpf(0.35, 0.9, t)
+	# Folia rośnie wolno: 25% owiniętych paczek po wprowadzeniu -> 80% około zlecenia 150.
+	p["wrap_fraction"] = lerpf(0.25, 0.8, clampf((level - INTRO_LEVEL[MOD_WRAP]) / 110.0, 0.0, 1.0))
 	p["limit_slack"] = lerpf(0.6, 0.15, t)
 
 	var mods: Array = []
@@ -60,7 +66,7 @@ static func params_for_level(level: int) -> Dictionary:
 			mods = [m]
 			p["intro"] = m
 	if mods.is_empty():
-		var last_intro: int = INTRO_LEVEL[MOD_DROP]
+		var last_intro: int = INTRO_LEVEL[MOD_WRAP]
 		if level <= last_intro + 2:
 			# Faza wprowadzania: na przemian "bez utrudnień" i poznane utrudnienia.
 			var options: Array = [null]
@@ -71,14 +77,18 @@ static func params_for_level(level: int) -> Dictionary:
 			if pick != null:
 				mods = [pick]
 		else:
-			# Faza pełna: cykl 7 zleceń - pięć pojedynczych utrudnień, para i "czyste".
-			match level % 7:
-				0, 1, 2, 3, 4:
-					mods = [ALL_MODS[level % 7]]
-				5:
-					mods = PAIRS[floori(level / 7.0) % PAIRS.size()]
-				6:
-					mods = []
+			# Faza pełna: cykl 10 zleceń (bez przerw) wg hierarchii utrudnień.
+			var idx := (level - floori(level / 5.0)) % CYCLE.size()
+			var entry: String = CYCLE[idx]
+			if entry == "para":
+				var pairs: Array = PAIRS_EARLY.duplicate()
+				if level >= 80:
+					pairs += PAIRS_WRAP
+				if level >= 110:
+					pairs.append(PAIR_HARDEST)
+				mods = pairs[floori(level / 10.0) % pairs.size()]
+			elif entry != "":
+				mods = [entry]
 	p["mods"] = mods
 	if mods.has(MOD_CAP5):
 		p["capacity"] = 5
@@ -87,7 +97,7 @@ static func params_for_level(level: int) -> Dictionary:
 		p["types"] = maxi(5, p["types"] - 1)
 	if p["intro"] != "":
 		p["target"] = 0.3
-		p["wrap_fraction"] = 0.35
+		p["wrap_fraction"] = 0.2
 		p["limit_slack"] = 0.6
 	return p
 

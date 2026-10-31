@@ -464,7 +464,7 @@ func _build_level_picker() -> void:
 	lbl_level_err.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_level_err)
 	var hint := _label(20, COL_MUTED)
-	hint.text = "Nowości: 18 folia • 23 limit • 28 palety na 5\n33 chwytaki • 41 śliskie paczki"
+	hint.text = "Nowości: 18 palety na 5 • 23 chwytaki • 28 śliskie\n33 limit ruchów • 41 folia"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(hint)
 	var ok := _button("Zatwierdź", func(): _confirm_level())

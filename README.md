@@ -11,6 +11,7 @@ Nazwa jest robocza. Przed publikacją sprawdź, czy nie jest zajęta w Google Pl
 - `docs/02_PUBLIKACJA_GOOGLE_PLAY.md` – jak tanio opublikować grę w Google Play
 - `docs/03_PLAN_WDROZENIA.md` – etapy od testów do premiery, kryteria decyzji, ryzyka
 - `docs/04_KAMPANIA_MARKETINGOWA.md` – pozycjonowanie, teksty do sklepu, kanały, kalendarz
+- `docs/06_HIERARCHIA_UTRUDNIEN.md` – pomiar wpływu utrudnień i ich kolejność (`tools/analyze_modifiers.gd`)
 - `docs/05_ANKIETA_I_ANALIZA.md` – ankieta w grze, arkusz Google z automatyczną analizą (`docs/ankieta/Code.gs`)
 
 ## Wymagania
@@ -49,12 +50,12 @@ Przycisk jest widoczny tylko w edytorze i w wersjach testowych (debug). W wersji
 | Zlecenia | Co się dzieje |
 |---|---|
 | 1–15 | Rośnie liczba produktów: 3 → 8 |
-| 18 | Nowość: **folia stretch** – paczki owinięte folią są ukryte, dopóki nie trafią na górę palety |
-| 23 | Nowość: **limit ruchów** – cofnięcie zwraca ruch |
-| 28 | Nowość: **palety na 5** paczek |
-| 33 | Nowość: **wymiana chwytaków** – próżnia (cały ciąg albo nic), widły (do 2), szczęki (1). Zmiana kosztuje ruch |
-| 41 | Nowość: **śliskie paczki** – z szansą 4% paczka wyślizguje się i spada z powrotem; ruch przepada i nie da się go cofnąć. Przy limicie ruchów generator dolicza zapas |
-| 43+ | Utrudnienia na przemian, czasem dwa naraz, czasem zlecenie bez utrudnień |
+| 18 | Nowość: **palety na 5** paczek |
+| 23 | Nowość: **wymiana chwytaków** – próżnia (cały ciąg albo nic), widły (do 2), szczęki (1). Zmiana kosztuje ruch |
+| 28 | Nowość: **śliskie paczki** – z szansą 4% paczka wyślizguje się i spada z powrotem; ruch przepada i nie da się go cofnąć. Przy limicie ruchów generator dolicza zapas |
+| 33 | Nowość: **limit ruchów** – cofnięcie zwraca ruch |
+| 41 | Nowość: **folia stretch** – paczki owinięte folią są ukryte, dopóki nie trafią na górę palety. Start od 20% owiniętych paczek, rośnie do 80% około zlecenia 150 |
+| 44+ | Utrudnienia na przemian wg hierarchii (lżejsze częściej, folia rzadziej); pary z folią od 80, folia + limit od 110 |
 | co 5. (od 10.) | Zlecenie „przerwa”: łatwiejsze, bez utrudnień |
 
 Przy pierwszym wystąpieniu nowości gra pokazuje krótką planszę z wyjaśnieniem. Natężenie (ile paczek w folii, jak ciasny limit) rośnie powoli do ok. 90. zlecenia.
