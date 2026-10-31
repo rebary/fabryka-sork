@@ -21,6 +21,7 @@ func _init() -> void:
 	test_tools()
 	test_optimal()
 	test_stars()
+	test_intro_levels()
 	test_programs(30)
 	test_precomputed_data()
 	test_generator(levels)
@@ -143,6 +144,14 @@ func test_optimal() -> void:
 	for m in opt.moves:
 		c.apply(m)
 	check(c.is_solved(), "rozwiązanie BFS układa planszę")
+
+
+## Każda nowość musi się pojawić na swoim zleceniu (nie może jej przykryć zlecenie-przerwa).
+func test_intro_levels() -> void:
+	for m in LevelGenerator.INTRO_LEVEL:
+		var n: int = LevelGenerator.INTRO_LEVEL[m]
+		var p := LevelGenerator.params_for_level(n)
+		check(p["intro"] == m and p["mods"].has(m), "nowość %s pojawia się na zleceniu %d" % [m, n])
 
 
 func test_stars() -> void:

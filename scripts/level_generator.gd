@@ -6,7 +6,7 @@ extends RefCounted
 ## KRZYWA TRUDNOŚCI KAMPANII (wszystkie liczby można stroić w tym pliku):
 ##  - zlecenia 1-15: rośnie liczba produktów (3 -> 8), bez utrudnień;
 ##  - nowości pojawiają się stopniowo: folia (18), limit ruchów (23), palety na 5 (28),
-##    wymiana chwytaków (33), śliskie paczki (40);
+##    wymiana chwytaków (33), śliskie paczki (41);
 ##  - potem utrudnienia występują na przemian, czasem po dwa naraz;
 ##  - co 5. zlecenie (od 10.) jest "przerwą": łatwiejsze, bez utrudnień;
 ##  - z kilku losowych kandydatów wybieramy ten o trudności najbliższej celowi.
@@ -17,7 +17,7 @@ const MOD_CAP5 := "cap5"
 const MOD_GRIP := "chwytaki"
 const MOD_DROP := "upadki"
 const ALL_MODS := [MOD_WRAP, MOD_LIMIT, MOD_CAP5, MOD_GRIP, MOD_DROP]
-const INTRO_LEVEL := {MOD_WRAP: 18, MOD_LIMIT: 23, MOD_CAP5: 28, MOD_GRIP: 33, MOD_DROP: 40}
+const INTRO_LEVEL := {MOD_WRAP: 18, MOD_LIMIT: 23, MOD_CAP5: 28, MOD_GRIP: 33, MOD_DROP: 41}
 const PAIRS := [[MOD_WRAP, MOD_LIMIT], [MOD_CAP5, MOD_WRAP], [MOD_CAP5, MOD_LIMIT], [MOD_GRIP, MOD_LIMIT],
 	[MOD_GRIP, MOD_WRAP], [MOD_DROP, MOD_WRAP], [MOD_DROP, MOD_CAP5], [MOD_DROP, MOD_GRIP]]
 ## Szansa, że paczka wyślizgnie się z chwytaka (utrudnienie "śliskie paczki").

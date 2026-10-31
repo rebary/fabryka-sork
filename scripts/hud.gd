@@ -10,7 +10,7 @@ signal next_pressed
 signal sound_toggled
 signal buy_pressed(product_id: String)
 signal ad_pressed
-signal level_chosen(level: int)
+signal level_chosen(level: int, for_program: bool)
 signal menu_pressed
 signal campaign_pressed
 signal program_mode_pressed
@@ -64,6 +64,7 @@ var lbl_intro: Label
 var level_layer: Control
 var level_title: Label
 var level_edit: LineEdit
+var picker_for_program := false
 var lbl_level_err: Label
 var menu_layer: Control
 var btn_menu_campaign: Button
@@ -328,6 +329,8 @@ func hide_menu() -> void:
 
 
 func show_level_picker(current: int, for_program: bool = false) -> void:
+	picker_for_program = for_program
+	level_layer.move_to_front()  # nad menu głównym
 	level_title.text = "Wybór programu (test)" if for_program else "Wybór poziomu (test)"
 	lbl_level_err.text = ""
 	level_edit.text = str(current)
@@ -441,7 +444,7 @@ func _build_level_picker() -> void:
 	lbl_level_err.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_level_err)
 	var hint := _label(20, COL_MUTED)
-	hint.text = "Nowości: 18 folia • 23 limit • 28 palety na 5\n33 chwytaki • 40 śliskie paczki"
+	hint.text = "Nowości: 18 folia • 23 limit • 28 palety na 5\n33 chwytaki • 41 śliskie paczki"
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(hint)
 	var ok := _button("Zatwierdź", func(): _confirm_level())
@@ -464,7 +467,8 @@ func _confirm_level() -> void:
 		lbl_level_err.text = "Wpisz liczbę od 1 do 9999"
 		return
 	level_layer.visible = false
-	level_chosen.emit(int(t))
+	menu_layer.visible = false
+	level_chosen.emit(int(t), picker_for_program)
 
 
 func _build_menu() -> void:
@@ -505,6 +509,17 @@ func _build_menu() -> void:
 		btn_menu_fx.text = "Efekty graficzne: wł." if Save.fx_on else "Efekty graficzne: wył.", 22)
 	btn_menu_fx.custom_minimum_size = Vector2(0, 80)
 	row.add_child(btn_menu_fx)
+	# Wybór poziomu z menu - TYLKO DO TESTÓW (ukryty w wersji wydawanej do sklepu).
+	if OS.is_debug_build():
+		var test_row := HBoxContainer.new()
+		test_row.add_theme_constant_override("separation", 12)
+		v.add_child(test_row)
+		var b1 := _button("Test: wybierz zlecenie", func(): show_level_picker(Save.level, false), 20)
+		b1.custom_minimum_size = Vector2(0, 76)
+		test_row.add_child(b1)
+		var b2 := _button("Test: wybierz program", func(): show_level_picker(Save.program, true), 20)
+		b2.custom_minimum_size = Vector2(0, 76)
+		test_row.add_child(b2)
 
 
 func _menu_button(cb: Callable) -> Button:

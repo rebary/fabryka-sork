@@ -46,7 +46,7 @@ Przycisk jest widoczny tylko w edytorze i w wersjach testowych (debug). W wersji
 | 23 | Nowość: **limit ruchów** – cofnięcie zwraca ruch |
 | 28 | Nowość: **palety na 5** paczek |
 | 33 | Nowość: **wymiana chwytaków** – próżnia (cały ciąg albo nic), widły (do 2), szczęki (1). Zmiana kosztuje ruch |
-| 40 | Nowość: **śliskie paczki** – z szansą 4% paczka wyślizguje się i spada z powrotem; ruch przepada i nie da się go cofnąć. Przy limicie ruchów generator dolicza zapas |
+| 41 | Nowość: **śliskie paczki** – z szansą 4% paczka wyślizguje się i spada z powrotem; ruch przepada i nie da się go cofnąć. Przy limicie ruchów generator dolicza zapas |
 | 43+ | Utrudnienia na przemian, czasem dwa naraz, czasem zlecenie bez utrudnień |
 | co 5. (od 10.) | Zlecenie „przerwa”: łatwiejsze, bez utrudnień |
 

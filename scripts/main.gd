@@ -669,10 +669,10 @@ func _on_decor_chosen(slot_id: String, item_id: String) -> void:
 
 
 ## Wybór poziomu z okna testowego (w trybie programowania - numer programu).
-func _on_level_chosen(n: int) -> void:
+func _on_level_chosen(n: int, for_program: bool) -> void:
 	if not anim.is_empty():
 		return
-	if mode == "program":
+	if for_program:
 		Save.program = n
 		Save.save()
 		_request("p", n)
