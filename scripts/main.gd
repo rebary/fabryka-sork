@@ -34,6 +34,7 @@ const INTROS := {
 	"cap5": ["Nowość: palety na 5", "Na tych paletach mieści się 5 paczek.\nPaleta jest gotowa, gdy ma 5 paczek tego samego produktu."],
 	"chwytaki": ["Nowość: wymiana chwytaków", "Próżnia bierze cały ciąg paczek – ale tylko, gdy zmieści się w całości.\nWidły biorą do 2 paczek, szczęki 1.\nZmiana chwytaka kosztuje jeden ruch."],
 	"upadki": ["Nowość: śliskie paczki", "Czasem paczka wyślizgnie się z chwytaka i spadnie z powrotem na paletę.\nTaki ruch przepada – nie da się go cofnąć."],
+	"program_folia": ["Program z folią", "Niektóre paczki są owinięte folią – nie wiesz, co jest w środku.\nUruchom program: robot odsłoni paczki, a po „Edytuj” zapamięta ich zawartość.\nNajpierw rozpoznanie, potem program na 3 gwiazdki."],
 	"program": ["Programowanie robota", "Ułóż program: dotknij palety źródłowej, potem docelowej – to jeden krok.\nPodczas programowania robot stoi, więc przewiduj skutki kroków w głowie.\nSTART uruchamia program. Błędny krok zatrzymuje robota."],
 }
 const TOOL_NAMES := {-1: "próżnię", 2: "widły", 1: "szczęki"}
@@ -80,6 +81,7 @@ var prog_state := "edit"  # edit / run / fault / fail / done
 var prog_index := -1
 var prog_error := -1
 var prog_wait := 0.0
+var prog_known := {}  # "paleta:poziom" -> typ paczki odsłoniętej w poprzednich uruchomieniach (folia)
 
 # Generowanie poziomów w tle (dla numerów spoza gotowego pliku danych).
 var gen_thread: Thread
@@ -295,12 +297,17 @@ func _apply_program(g: Dictionary) -> void:
 	board = g["board"]
 	start_board = board.clone()
 	program.clear()
+	prog_known.clear()
 	prog_state = "edit"
 	prog_index = -1
 	prog_error = -1
 	hints_used_level = 0
 	_reset_state()
 	hud.transition()
+	if mode == "program" and board.wrapped_count() > 0 and not Save.seen_intros.has("program_folia"):
+		Save.seen_intros.append("program_folia")
+		Save.save()
+		hud.show_intro(INTROS["program_folia"][0], INTROS["program_folia"][1])
 
 
 func _restart_level() -> void:
@@ -350,6 +357,10 @@ func _try_move(from: int, to: int) -> bool:
 	var src_top := _box_rect(from, src_size - 1).position
 	var dst_top := _box_rect(to, dst_size + n - 1).position
 	var rec := board.do_move(from, to)
+	if mode == "program":
+		# Paczka w folii nie rusza się, dopóki jest owinięta - pozycja odsłonięcia = pozycja startowa.
+		for rv in rec[3]:
+			prog_known["%d:%d" % [rv[0], rv[1]]] = board.stacks[rv[0]][rv[1]]
 	var lucky := false
 	if mode == "duel":
 		history.append(rec)
@@ -998,6 +1009,8 @@ func _update_hud() -> void:
 	if mode == "program":
 		hud.set_program_status(prog["number"], program, prog["max_steps"], prog["optimal"],
 			prog_index if prog_state == "run" else -1, prog_error, prog_state, Save.wallet.hints)
+		if start_board != null and start_board.wrapped_count() > 0:
+			hud.lbl_badges.text += "  •  Folia: %d/%d znane" % [prog_known.size(), start_board.wrapped_count()]
 	else:
 		hud.set_status(level, _moves_used(), move_limit, params.get("mods", []), Save.wallet.hints)
 		hud.set_tools(board.tools, board.tool_cap)
@@ -1516,7 +1529,11 @@ func _draw_stack(i: int) -> void:
 		br.position.y += by * (k + 1) / float(maxi(1, visible_count))
 		if k >= lift_from:
 			br.position.y -= 24.0 + sin(time * 7.0) * 3.0
-		_draw_box(br, stack[k], _wrapped_during_anim(i, k))
+		var v: int = stack[k]
+		if v < 0 and mode == "program" and prog_known.has("%d:%d" % [i, k]):
+			_draw_known_wrapped(br, int(prog_known["%d:%d" % [i, k]]))
+		else:
+			_draw_box(br, v, _wrapped_during_anim(i, k))
 	var pr := Rect2(base.x - 6, base.y + r.size.y - pallet_h, r.size.x + 12, pallet_h)
 	_draw_pallet(pr)
 	if mode == "program":
@@ -1657,6 +1674,16 @@ func _draw_box_skin(inner: Rect2, v: int, col: Color, skin: String) -> void:
 		_:
 			draw_style_box(_box_style(v), inner)
 			_draw_icon(v, c, s, Color.WHITE)
+
+
+## Paczka w folii, której zawartość gracz już zna (odsłonięta w poprzednim uruchomieniu programu).
+func _draw_known_wrapped(rect: Rect2, type: int) -> void:
+	_draw_box(rect, type)
+	var inner := rect.grow(-3)
+	draw_rect(inner, Color(0.85, 0.9, 0.95, 0.35))
+	for k in 3:
+		var y := inner.position.y + inner.size.y * (0.25 + 0.25 * k)
+		draw_line(Vector2(inner.position.x + 6, y), Vector2(inner.end.x - 6, y + 4), Color(1, 1, 1, 0.6), 2)
 
 
 func _draw_wrapped(inner: Rect2) -> void:

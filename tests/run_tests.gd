@@ -275,7 +275,10 @@ func test_programs(count: int) -> void:
 		var g := LevelGenerator.generate_program(n)
 		worst = maxi(worst, Time.get_ticks_msec() - t0)
 		var b: Board = g.board
-		check(b.capacity == 3 and b.tools.is_empty() and b.wrapped_count() == 0, "program %d: zwykła plansza na 3" % n)
+		var want_wrap := LevelGenerator.program_wrap_count(LevelGenerator.program_params(n))
+		check(b.capacity == 3 and b.tools.is_empty() and b.wrapped_count() == want_wrap, "program %d: plansza na 3, folia: %d" % [n, want_wrap])
+		if n % 10 == 0:
+			check(want_wrap >= 1, "program %d: zadanie specjalne z folią" % n)
 		check(not b.is_solved(), "program %d nie jest ułożony" % n)
 		check(g.max_steps > g.optimal and g.optimal >= 1, "program %d: limit kroków > optimum" % n)
 		var r := Solver.solve_optimal(b)

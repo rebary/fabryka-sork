@@ -65,7 +65,7 @@ Dwa rankingi: **ranga za postępy** (kampania + programowanie, z podziałem punk
 | 11–20 | 3→4 | 2 | 5–8 |
 | 21–35 | 4 | 2→1 | 7–10 |
 | 36–60 | 5 | 2→1 | 8–12 |
-Co 5. program jest łatwiejszy. **Podgląd** pokazuje palety po wykonaniu obecnych kroków: za darmo w programach 1–3, potem za 1 podpowiedź.
+Programy 15, 25, 35… są łatwiejsze (przerwa). **Co 10. program to zadanie specjalne z folią** (normalna trudność): 10 – 1 paczka w folii, 20 – 2, 30 – 3, od 40 – 4 (najwyżej 40% paczek spod spodu). Pierwsze uruchomienie odsłania paczki, a po „Edytuj” robot pamięta ich zawartość (widać ją przez folię). Model gracza układającego program w ciemno potrzebuje średnio 1–3 uruchomień (`tools/analyze_program_wrap.gd`). **Podgląd** pokazuje palety po wykonaniu obecnych kroków: za darmo w programach 1–3, potem za 1 podpowiedź.
 
 ## Wybór poziomu (tylko do testów)
 Przycisk **Poziom** (u góry) otwiera okno: wpisz numer zlecenia albo użyj „–”/„+” i naciśnij **Zatwierdź**. Wybrany poziom zapisuje się jako bieżący postęp.

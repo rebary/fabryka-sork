@@ -195,7 +195,7 @@ static func program_from_data(number: int, d: Dictionary) -> Dictionary:
 ## Parametry programu nr n - łagodna krzywa (tryb wymaga planowania w głowie):
 ## 1-3 samouczek (2 produkty, 2-4 kroki), potem powolny wzrost; co 5. program łatwiejszy.
 static func program_params(n: int) -> Dictionary:
-	var p := {"types": 3, "empty": 2, "lo": 3, "slack": 2, "breather": false}
+	var p := {"types": 3, "empty": 2, "lo": 3, "slack": 2, "breather": false, "wrap": 0}
 	if n <= 3:
 		p["types"] = 2
 		p["lo"] = n + 1
@@ -215,11 +215,21 @@ static func program_params(n: int) -> Dictionary:
 		p["empty"] = 2 if n <= 45 else 1
 		p["lo"] = mini(8 + floori((n - 36) / 8.0), 11)
 		p["slack"] = 2 if n <= 45 else 1
-	if n > 5 and n % 5 == 0:
+	if n % 10 == 0:
+		# Zadanie specjalne: normalna trudność + folia (1 paczka na każde 10 programów,
+		# najwyżej 40% paczek leżących pod spodem - wyliczane przy generowaniu).
+		p["wrap"] = floori(n / 10.0)
+	elif n > 5 and n % 5 == 0:
 		p["breather"] = true
 		p["lo"] = maxi(3, p["lo"] - 2)
 		p["types"] = maxi(2, p["types"] - 1)
 	return p
+
+
+## Ile paczek owinąć w programie: wg parametrów, ale najwyżej 40% paczek spod spodu.
+static func program_wrap_count(pp: Dictionary) -> int:
+	var nontop: int = int(pp["types"]) * 3 - int(pp["types"])  # palety na 3: pod spodem 2 z każdego stosu (przybliżenie)
+	return mini(int(pp["wrap"]), floori(0.4 * nontop))
 
 
 ## Program (poziom trybu programowania): mała plansza (palety na 3), znane najkrótsze rozwiązanie.
@@ -232,10 +242,18 @@ static func generate_program(number: int) -> Dictionary:
 	var hi: int = lo + 1
 	var best: Board = null
 	var best_len := 0
+	var wraps := program_wrap_count(pp)
 	for attempt in 200:
 		var b := _random_board(rng, pp["types"], 3, pp["empty"])
 		if _too_easy(b):
 			continue
+		if wraps > 0:
+			var nontop := 0
+			for st in b.stacks:
+				nontop += maxi(0, st.size() - 1)
+			_wrap(b, rng, float(wraps) / float(maxi(1, nontop)))
+			if b.wrapped_count() != wraps:
+				continue
 		var r := Solver.solve_optimal(b, 40000)
 		if not r.ok:
 			continue
