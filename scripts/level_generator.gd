@@ -192,19 +192,48 @@ static func program_from_data(number: int, d: Dictionary) -> Dictionary:
 
 # ---------------------------------------------------------------- tryb programowania
 
+## Parametry programu nr n - łagodna krzywa (tryb wymaga planowania w głowie):
+## 1-3 samouczek (2 produkty, 2-4 kroki), potem powolny wzrost; co 5. program łatwiejszy.
+static func program_params(n: int) -> Dictionary:
+	var p := {"types": 3, "empty": 2, "lo": 3, "slack": 2, "breather": false}
+	if n <= 3:
+		p["types"] = 2
+		p["lo"] = n + 1
+		p["slack"] = 3
+	elif n <= 10:
+		p["lo"] = 3 + floori((n - 4) / 3.0)
+		p["slack"] = 3
+	elif n <= 20:
+		p["types"] = 3 if n <= 15 else 4
+		p["lo"] = 5 + floori((n - 11) / 4.0)
+	elif n <= 35:
+		p["types"] = 4
+		p["empty"] = 2 if n <= 30 else 1
+		p["lo"] = 7 + floori((n - 21) / 6.0)
+	else:
+		p["types"] = 5
+		p["empty"] = 2 if n <= 45 else 1
+		p["lo"] = mini(8 + floori((n - 36) / 8.0), 11)
+		p["slack"] = 2 if n <= 45 else 1
+	if n > 5 and n % 5 == 0:
+		p["breather"] = true
+		p["lo"] = maxi(3, p["lo"] - 2)
+		p["types"] = maxi(2, p["types"] - 1)
+	return p
+
+
 ## Program (poziom trybu programowania): mała plansza (palety na 3), znane najkrótsze rozwiązanie.
 ## Zwraca {"board", "optimal" (liczba kroków), "max_steps", "number"}.
 static func generate_program(number: int) -> Dictionary:
 	var rng := RandomNumberGenerator.new()
 	rng.seed = hash("fabryka_program_%d" % number)
-	var types := clampi(2 + floori((number + 1) / 3.0), 3, 5)
-	var lo := clampi(3 + floori(number / 3.0), 3, 10)
-	var hi := lo + 2
-	var empty_count := 2 if number < 12 else 1
+	var pp := program_params(number)
+	var lo: int = pp["lo"]
+	var hi: int = lo + 1
 	var best: Board = null
 	var best_len := 0
-	for attempt in 120:
-		var b := _random_board(rng, types, 3, empty_count)
+	for attempt in 200:
+		var b := _random_board(rng, pp["types"], 3, pp["empty"])
 		if _too_easy(b):
 			continue
 		var r := Solver.solve_optimal(b, 40000)
@@ -219,10 +248,9 @@ static func generate_program(number: int) -> Dictionary:
 			best = b
 			best_len = n
 	if best == null:
-		best = _random_board(rng, 3, 3, 2)
+		best = _random_board(rng, 2, 3, 2)
 		best_len = Solver.solve_optimal(best).moves.size()
-	var slack := 2 if number < 10 else 1
-	return {"board": best, "optimal": best_len, "max_steps": best_len + slack, "number": number}
+	return {"board": best, "optimal": best_len, "max_steps": best_len + int(pp["slack"]), "number": number}
 
 
 static func program_stars(steps: int, optimal: int) -> int:

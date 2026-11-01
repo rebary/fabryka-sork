@@ -19,6 +19,7 @@ signal tool_pressed(cap: int)
 signal prog_delete_pressed
 signal prog_clear_pressed
 signal prog_start_pressed
+signal prog_preview_pressed
 signal fx_toggled
 signal survey_submitted(answers: Dictionary)
 signal survey_opened
@@ -74,6 +75,14 @@ var btn_menu_program: Button
 var btn_menu_decor: Button
 var btn_menu_sound: Button
 var btn_menu_fx: Button
+var btn_menu_rank: Button
+var rank_layer: Control
+var lbl_rank_name: Label
+var lbl_rank_points: Label
+var rank_bar: ProgressBar
+var lbl_rank_next: Label
+var rank_list: VBoxContainer
+var lbl_rank_stats: Label
 var fade: ColorRect
 # Ankieta.
 const SURVEY_CHOICES := {
@@ -156,12 +165,15 @@ func _ready() -> void:
 	bar_tools.visible = false
 
 	bar_program = _bottom_bar()
-	bar_program.add_child(_button("Usuń\nkrok", func(): prog_delete_pressed.emit(), 22))
-	bar_program.add_child(_button("Wyczyść", func(): prog_clear_pressed.emit(), 22))
-	btn_prog_hint = _button("Podpowiedź", func(): hint_pressed.emit(), 22)
+	bar_program.add_child(_button("Usuń\nkrok", func(): prog_delete_pressed.emit(), 20))
+	bar_program.add_child(_button("Wyczyść", func(): prog_clear_pressed.emit(), 20))
+	var btn_preview := _button("Podgląd", func(): prog_preview_pressed.emit(), 20)
+	btn_preview.add_theme_stylebox_override("normal", _box(Color("#1f3a4d"), Color("#4fd1ff"), 3))
+	bar_program.add_child(btn_preview)
+	btn_prog_hint = _button("Podpowiedź", func(): hint_pressed.emit(), 20)
 	btn_prog_hint.add_theme_stylebox_override("normal", _box(Color("#3a3216"), COL_ACCENT, 3))
 	bar_program.add_child(btn_prog_hint)
-	btn_prog_start = _button("START", func(): prog_start_pressed.emit(), 28)
+	btn_prog_start = _button("START", func(): prog_start_pressed.emit(), 24)
 	btn_prog_start.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), COL_GREEN, 3))
 	bar_program.add_child(btn_prog_start)
 	bar_program.visible = false
@@ -183,6 +195,7 @@ func _ready() -> void:
 	_build_decor()
 	_build_menu()
 	_build_survey()
+	_build_ranking()
 	_build_survey_prompt()
 	_build_busy()
 	# Przejście między poziomami (krótkie wygaszenie).
@@ -339,6 +352,8 @@ func show_menu() -> void:
 	btn_menu_campaign.text = "Kampania – zlecenie %d" % Save.level
 	btn_menu_program.text = "Programowanie robota – program %d" % Save.program
 	btn_menu_decor.text = "Rozbudowa hali – %d" % Save.stars_available()
+	var rk := Score.rank_for(Save.total_points())
+	btn_menu_rank.text = "Ranking – %s (%d pkt)" % [rk["name"], Save.total_points()]
 	btn_menu_sound.text = "Dźwięk: wł." if Save.sound_on else "Dźwięk: wył."
 	btn_menu_fx.text = "Efekty graficzne: wł." if Save.fx_on else "Efekty graficzne: wył."
 	menu_layer.visible = true
@@ -366,7 +381,7 @@ func show_decor() -> void:
 
 
 func is_modal_open() -> bool:
-	for l in [win_layer, shop_layer, intro_layer, busy_layer, level_layer, menu_layer, decor_layer, survey_layer, prompt_layer]:
+	for l in [win_layer, shop_layer, intro_layer, busy_layer, level_layer, menu_layer, decor_layer, survey_layer, prompt_layer, rank_layer]:
 		if l.visible:
 			return true
 	return false
@@ -378,8 +393,10 @@ func _build_win() -> void:
 	win_layer = _overlay()
 	win_panel = _panel(win_layer)
 	var v := _vbox(win_panel)
-	lbl_win = _label(36, COL_TEXT)
+	lbl_win = _label(32, COL_TEXT)
 	lbl_win.add_theme_font_override("font", Look.bold)
+	lbl_win.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl_win.custom_minimum_size = Vector2(520, 0)
 	lbl_win.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_win)
 	win_stars = StarRow.new(64)
@@ -514,6 +531,10 @@ func _build_menu() -> void:
 	btn_menu_decor.icon = star_icon
 	btn_menu_decor.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	v.add_child(btn_menu_decor)
+	btn_menu_rank = _menu_button(func(): show_ranking())
+	btn_menu_rank.add_theme_stylebox_override("normal", _box(Color("#4a3a12"), COL_ACCENT, 3))
+	btn_menu_rank.custom_minimum_size = Vector2(560, 90)
+	v.add_child(btn_menu_rank)
 	var btn_survey := _menu_button(func(): show_survey())
 	btn_survey.text = "Ankieta – podziel się wrażeniami"
 	btn_survey.custom_minimum_size = Vector2(560, 84)
@@ -616,6 +637,73 @@ func refresh_decor() -> void:
 			if selected:
 				b.add_theme_stylebox_override("normal", _box(Color("#1f4a5c"), Color("#4fd1ff"), 3))
 			decor_list.add_child(b)
+
+
+# ---------------------------------------------------------------- ranking
+
+func show_ranking() -> void:
+	var total := Save.total_points()
+	var rk := Score.rank_for(total)
+	lbl_rank_name.text = rk["name"]
+	lbl_rank_points.text = "%d pkt" % total
+	if rk["next_min"] > 0:
+		var span: float = float(rk["next_min"] - rk["min"])
+		rank_bar.value = 100.0 * float(total - int(rk["min"])) / span
+		lbl_rank_next.text = "Do rangi „%s”: %d pkt" % [rk["next_name"], int(rk["next_min"]) - total]
+	else:
+		rank_bar.value = 100.0
+		lbl_rank_next.text = "Najwyższa ranga – gratulacje!"
+	for c in rank_list.get_children():
+		c.queue_free()
+	for i in Score.RANKS.size():
+		var r: Dictionary = Score.RANKS[i]
+		var l := _label(24, COL_GREEN if i < rk["index"] else (COL_ACCENT if i == rk["index"] else COL_MUTED))
+		var mark := "✓ " if i < rk["index"] else ("» " if i == rk["index"] else "   ")
+		l.text = "%s%s – od %d pkt" % [mark, r["name"], r["min"]]
+		rank_list.add_child(l)
+	lbl_rank_stats.text = "Ukończone zlecenia: %d (%d pkt)\nUkończone programy: %d (%d pkt)\nGwiazdki: %d" % [
+		Save.stars.size(), Save.points_of("c"), Save.program_stars.size(), Save.points_of("p"), Save.total_stars()]
+	menu_layer.visible = false
+	rank_layer.move_to_front()
+	rank_layer.visible = true
+
+
+func _build_ranking() -> void:
+	rank_layer = _overlay()
+	var v := _vbox(_panel(rank_layer))
+	v.add_theme_constant_override("separation", 12)
+	v.add_child(_title("Ranking"))
+	lbl_rank_name = _label(40, COL_ACCENT)
+	lbl_rank_name.add_theme_font_override("font", Look.bold)
+	lbl_rank_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(lbl_rank_name)
+	lbl_rank_points = _label(30, COL_TEXT)
+	lbl_rank_points.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(lbl_rank_points)
+	rank_bar = ProgressBar.new()
+	rank_bar.custom_minimum_size = Vector2(520, 26)
+	rank_bar.show_percentage = false
+	rank_bar.add_theme_stylebox_override("background", _box(Color("#2a3038"), Color("#3a414b"), 1))
+	rank_bar.add_theme_stylebox_override("fill", _box(COL_ACCENT, COL_ACCENT, 0))
+	v.add_child(rank_bar)
+	lbl_rank_next = _label(22, COL_MUTED)
+	lbl_rank_next.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(lbl_rank_next)
+	rank_list = VBoxContainer.new()
+	rank_list.add_theme_constant_override("separation", 4)
+	v.add_child(rank_list)
+	lbl_rank_stats = _label(22, COL_TEXT)
+	lbl_rank_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(lbl_rank_stats)
+	var info := _label(18, COL_MUTED)
+	info.text = "Punkty: trudność poziomu × gwiazdki (+20% bez podpowiedzi).\nLiczy się najlepszy wynik każdego poziomu."
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(info)
+	var close := _button("Zamknij", func():
+		rank_layer.visible = false
+		show_menu())
+	close.custom_minimum_size = Vector2(520, 90)
+	v.add_child(close)
 
 
 # ---------------------------------------------------------------- ankieta

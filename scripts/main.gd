@@ -63,6 +63,10 @@ var history: Array = []
 var dropped_moves := 0  # ruchy stracone przez upuszczenie paczki (nie da się ich cofnąć)
 var found_hint_this_level := false
 var hint_planner := HintPlanner.new()
+var hints_used_level := 0  # podpowiedzi użyte na tym poziomie (premia punktowa za grę bez nich)
+var preview := {}  # podgląd programu: {"board", "time", "error"}
+const PREVIEW_TIME := 4.0
+const FREE_PREVIEW_PROGRAMS := 3  # w programach 1-3 podgląd jest darmowy (nauka)
 var max_progress := 0
 
 # Tryb programowania.
@@ -130,6 +134,7 @@ func _ready() -> void:
 	hud.prog_delete_pressed.connect(_on_prog_delete)
 	hud.prog_clear_pressed.connect(_on_prog_clear)
 	hud.prog_start_pressed.connect(_on_prog_start)
+	hud.prog_preview_pressed.connect(_on_prog_preview)
 	hud.survey_submitted.connect(_on_survey_submitted)
 	hud.survey_opened.connect(func(): Save.feedback_prompted = true)
 	hud.menu_pressed.connect(func(): Feedback.flush())
@@ -260,6 +265,7 @@ func _apply_level(g: Dictionary) -> void:
 	par = g["par"]
 	found_hint_this_level = false
 	max_progress = 0
+	hints_used_level = 0
 	_reset_state()
 	hud.transition()
 	var intro: String = params["intro"]
@@ -279,6 +285,7 @@ func _apply_program(g: Dictionary) -> void:
 	prog_state = "edit"
 	prog_index = -1
 	prog_error = -1
+	hints_used_level = 0
 	_reset_state()
 	hud.transition()
 
@@ -300,6 +307,7 @@ func _reset_state() -> void:
 	bounce.clear()
 	shake.clear()
 	fault_time = 0.0
+	preview = {}
 	_layout()
 	gripper_x = get_viewport_rect().size.x / 2.0
 	_update_hud()
@@ -405,6 +413,10 @@ func _on_level_complete() -> void:
 	var moves := _moves_used()
 	var stars := LevelGenerator.stars_for(moves, par)
 	var new_stars: int = Save.record_stars(false, level, stars)
+	var pts := Score.points(Score.campaign_base(params), stars, hints_used_level)
+	var rank_before := Score.rank_for(Save.total_points())
+	var gained: int = Save.record_points("c%d" % level, pts)
+	var rank_after := Score.rank_for(Save.total_points())
 	var bonus: int = Save.wallet.on_level_completed()
 	Save.level = level + 1
 	Save.tasks_completed += 1
@@ -413,12 +425,27 @@ func _on_level_complete() -> void:
 	fx.confetti(get_viewport_rect().size.x)
 	Sfx.play("win")
 	var text := "Zlecenie %d wykonane!\nRuchy: %d (na 3 gwiazdki: %d)" % [level, moves, par]
+	text += _points_text(pts, gained, rank_before, rank_after)
 	if new_stars > 0:
 		text += "\n+%d %s do rozbudowy hali" % [new_stars, _plural(new_stars, "gwiazdka", "gwiazdki", "gwiazdek")]
 	if bonus > 0:
 		text += "\n+1 podpowiedź za 3 zlecenia"
 	await get_tree().create_timer(0.6).timeout
 	hud.show_win(text, stars, "Następne zlecenie")
+
+
+## Tekst o punktach i ewentualnym awansie na ekranie wygranej.
+func _points_text(pts: int, gained: int, rank_before: Dictionary, rank_after: Dictionary) -> String:
+	var t := ""
+	if gained > 0:
+		t += "\n+%d pkt%s" % [gained, " (bez podpowiedzi +20%)" if hints_used_level == 0 else ""]
+	else:
+		t += "\nWynik: %d pkt (rekord bez zmian)" % pts
+	if rank_after["index"] > rank_before["index"]:
+		t += "\nAWANS: %s!" % rank_after["name"]
+		fx.confetti(get_viewport_rect().size.x)
+		Sfx.play("reward")
+	return t
 
 
 func _on_undo() -> void:
@@ -499,6 +526,45 @@ func _on_prog_start() -> void:
 	_update_hud()
 
 
+## Podgląd programu: pokazuje, jak wyglądałyby palety po wykonaniu obecnych kroków.
+## W programach 1-3 za darmo, potem kosztuje 1 podpowiedź.
+func _on_prog_preview() -> void:
+	if mode != "program" or prog_state != "edit" or hud.is_modal_open():
+		return
+	if program.is_empty():
+		hud.show_msg("Dodaj kroki, żeby zobaczyć ich skutek", 3.0)
+		return
+	var free: bool = int(prog["number"]) <= FREE_PREVIEW_PROGRAMS
+	if not free and not Save.wallet.can_use():
+		hud.show_shop()
+		return
+	var sim := start_board.clone()
+	var error := -1
+	for k in program.size():
+		var st: Array = program[k]
+		if sim.move_count(st[0], st[1]) == 0:
+			error = k
+			break
+		sim.do_move(st[0], st[1])
+	if not free:
+		_use_hint()
+		Save.save()
+	selected = -1
+	preview = {"board": sim, "time": PREVIEW_TIME, "error": error}
+	Sfx.play("hint")
+	if error >= 0:
+		hud.show_msg("Podgląd: krok %d się nie wykona – robot zatrzyma się tutaj" % (error + 1), PREVIEW_TIME)
+	elif sim.is_solved():
+		hud.show_msg("Podgląd: program działa! Naciśnij START", PREVIEW_TIME)
+	else:
+		hud.show_msg("Podgląd: tak wyglądają palety po Twoim programie", PREVIEW_TIME)
+	_update_hud()
+
+
+func _shown_board() -> Board:
+	return preview["board"] if not preview.is_empty() else board
+
+
 func _program_tick(delta: float) -> void:
 	if prog_state != "run" or not anim.is_empty():
 		return
@@ -546,6 +612,10 @@ func _on_program_complete() -> void:
 	var number: int = prog["number"]
 	var stars := LevelGenerator.program_stars(program.size(), prog["optimal"])
 	var new_stars: int = Save.record_stars(true, number, stars)
+	var pts := Score.points(Score.program_base(prog["optimal"]), stars, hints_used_level)
+	var rank_before := Score.rank_for(Save.total_points())
+	var gained: int = Save.record_points("p%d" % number, pts)
+	var rank_after := Score.rank_for(Save.total_points())
 	var bonus: int = Save.wallet.on_level_completed()
 	Save.program = maxi(Save.program, number + 1)
 	Save.tasks_completed += 1
@@ -554,6 +624,7 @@ func _on_program_complete() -> void:
 	fx.confetti(get_viewport_rect().size.x)
 	Sfx.play("win")
 	var text := "Program %d działa!\nKroki: %d (najkrótszy: %d)" % [number, program.size(), prog["optimal"]]
+	text += _points_text(pts, gained, rank_before, rank_after)
 	if new_stars > 0:
 		text += "\n+%d %s do rozbudowy hali" % [new_stars, _plural(new_stars, "gwiazdka", "gwiazdki", "gwiazdek")]
 	if bonus > 0:
@@ -572,7 +643,7 @@ func _program_hint() -> void:
 			board = sim
 			var reason := _fault_reason(st[0], st[1])
 			board = saved
-			Save.wallet.use()
+			_use_hint()
 			hud.show_msg("Krok %d nie zadziała: %s" % [k + 1, reason], 5.0)
 			return
 		sim.do_move(st[0], st[1])
@@ -589,7 +660,7 @@ func _program_hint() -> void:
 	seen.erase(sim.key())
 	var r := Solver.solve(sim, 40000, left, seen)
 	if r.ok and not r.moves.is_empty():
-		Save.wallet.use()
+		_use_hint()
 		var m: Array = r.moves[0]
 		hint = {"from": m[0], "to": m[1], "time": HINT_TIME}
 		hud.show_msg("Dodaj krok: %d » %d" % [m[0] + 1, m[1] + 1], 5.0)
@@ -600,7 +671,7 @@ func _program_hint() -> void:
 		for j in k:
 			b.do_move(program[j][0], program[j][1])
 		if Solver.solve(b, 20000, prog["max_steps"] - k).ok:
-			Save.wallet.use()
+			_use_hint()
 			hud.show_msg("Usuń kroki od %d – dalej program nie da się dokończyć" % (k + 1), 5.0)
 			return
 	hud.show_msg("Spróbuj ułożyć program od nowa", 4.0)
@@ -631,7 +702,7 @@ func _on_hint() -> void:
 func _campaign_hint() -> void:
 	var h := hint_planner.next_move(board, history, _limit_left() if move_limit > 0 else -1)
 	if not h.is_empty():
-		Save.wallet.use()
+		_use_hint()
 		var m: Array = h["move"]
 		if m[0] < 0:
 			hud.show_msg("Zmień chwytak na %s" % TOOL_NAMES.get(m[1], "inny"), HINT_TIME)
@@ -641,10 +712,15 @@ func _campaign_hint() -> void:
 		return
 	var k := _undos_needed()
 	if k > 0:
-		Save.wallet.use()
+		_use_hint()
 		hud.show_msg("Ślepy zaułek – cofnij %d %s" % [k, _plural(k, "ruch", "ruchy", "ruchów")], 4.0)
 	else:
 		hud.show_msg("Najlepiej zacząć od nowa (podpowiedź nie została zużyta)", 4.0)
+
+
+func _use_hint() -> void:
+	Save.wallet.use()
+	hints_used_level += 1
 
 
 func _undos_needed() -> int:
@@ -788,6 +864,9 @@ func _on_tap(pos: Vector2) -> void:
 func _on_tap_program(pos: Vector2) -> void:
 	if prog_state != "edit":
 		return
+	if not preview.is_empty():
+		preview = {}
+		return
 	var i := _stack_at(pos)
 	hint = {}
 	if i < 0:
@@ -846,6 +925,10 @@ func _process(delta: float) -> void:
 			_after_move(to)
 	if mode == "program":
 		_program_tick(delta)
+	if not preview.is_empty():
+		preview["time"] -= delta
+		if preview["time"] <= 0.0:
+			preview = {}
 	_decay(bounce, delta * 3.0)
 	_decay(shake, delta)
 	fault_time = maxf(0.0, fault_time - delta)
@@ -915,6 +998,10 @@ func _draw() -> void:
 		for i in board.stacks.size():
 			_draw_stack(i)
 	_draw_robot()
+	if not preview.is_empty() and not stack_rects.is_empty():
+		var r0: Rect2 = stack_rects[0]
+		var a := 0.6 + 0.4 * sin(time * 6.0)
+		draw_string(ThemeDB.fallback_font, Vector2(0, r0.position.y - 34), "PODGLĄD PROGRAMU", HORIZONTAL_ALIGNMENT_CENTER, vs.x, 30, Color(0.31, 0.82, 1.0, a))
 
 
 func _draw_hall(vs: Vector2) -> void:
@@ -1081,9 +1168,10 @@ func _draw_arm(vs: Vector2, floor_y: float) -> void:
 # ---------------------------------------------------------------- rysowanie: palety i paczki
 
 func _draw_stack(i: int) -> void:
+	var bd := _shown_board()
 	var r: Rect2 = stack_rects[i]
-	var stack: Array = board.stacks[i]
-	var complete := board.is_stack_complete(i)
+	var stack: Array = bd.stacks[i]
+	var complete := bd.is_stack_complete(i)
 	var sx: float = sin(time * 60.0) * 7.0 * (shake.get(i, 0.0) / 0.3)
 	var by := sin(bounce.get(i, 0.0) * PI) * 5.0
 	var base := r.position + Vector2(sx, 0)
@@ -1111,7 +1199,7 @@ func _draw_stack(i: int) -> void:
 		draw_circle(lamp, 6, lamp_col)
 	var hidden: int = anim["n"] if not anim.is_empty() and anim["to"] == i else 0
 	var visible_count := stack.size() - hidden
-	var lift_from := stack.size() - board.top_run(i) if selected == i and mode == "campaign" else 9999
+	var lift_from := stack.size() - bd.top_run(i) if selected == i and mode == "campaign" else 9999
 	for k in visible_count:
 		var br := _box_rect(i, k)
 		br.position.x += sx

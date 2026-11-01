@@ -78,6 +78,9 @@ Czasy są **szacunkami z dużą niepewnością** (±50%). Progi decyzji to **pro
 | Konflikt z umową o pracę | Problemy prawne | Sprawdzenie umowy przed publikacją |
 | Rozrastanie się projektu (nowe tryby) | Gra nigdy nie wychodzi | Zamrożenie funkcji do premiery; pomysły do osobnej listy |
 
+## Ranking z innymi graczami (decyzja przed premierą)
+W grze jest ranking lokalny (punkty i rangi). Ranking online – rekomendacja: **tablice wyników Google Play Games** (bezpłatne, Google obsługuje konta, nazwy graczy i podstawową ochronę przed oszustwami; wymaga konta Play Console i wtyczki do Godota, test tylko na telefonie). Alternatywa: własny arkusz Google jak przy ankietach – tańszy w starcie, ale wymaga moderacji nicków i jest łatwy do oszukania.
+
 ## Lista pomysłów „po premierze” (nie teraz)
 - Trzeci tryb / osobna gra: kilka ramion manipulatorów podających sobie paczki.
 - Wersja angielska i kolejne języki.

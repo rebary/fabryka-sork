@@ -21,6 +21,7 @@ var tasks_completed: int = 0  # ukończone zlecenia + programy
 var feedback_pending: Array = []  # ankiety czekające na wysłanie (np. brak internetu)
 var feedback_sent: int = 0
 var feedback_prompted: bool = false
+var points: Dictionary = {}  # "c12" / "p5" -> najlepsze punkty za zlecenie / program
 
 
 func _ready() -> void:
@@ -53,6 +54,7 @@ func load_data() -> void:
 	feedback_pending = cfg.get_value("feedback", "pending", [])
 	feedback_sent = int(cfg.get_value("feedback", "sent", 0))
 	feedback_prompted = bool(cfg.get_value("feedback", "prompted", false))
+	points = cfg.get_value("progress", "points", {})
 
 
 func save() -> void:
@@ -74,6 +76,7 @@ func save() -> void:
 	cfg.set_value("feedback", "pending", feedback_pending)
 	cfg.set_value("feedback", "sent", feedback_sent)
 	cfg.set_value("feedback", "prompted", feedback_prompted)
+	cfg.set_value("progress", "points", points)
 	cfg.save(PATH)
 
 
@@ -119,3 +122,27 @@ func choose_decor(slot_id: String, item_id: String) -> bool:
 	decor_selected[slot_id] = item_id
 	save()
 	return true
+
+
+## Zapisuje punkty za poziom (liczy się najlepszy wynik). Zwraca przyrost punktów.
+func record_points(key: String, earned: int) -> int:
+	var before: int = points.get(key, 0)
+	if earned > before:
+		points[key] = earned
+		return earned - before
+	return 0
+
+
+func total_points() -> int:
+	var n := 0
+	for v in points.values():
+		n += int(v)
+	return n
+
+
+func points_of(prefix: String) -> int:
+	var n := 0
+	for k in points:
+		if str(k).begins_with(prefix):
+			n += int(points[k])
+	return n

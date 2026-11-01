@@ -37,6 +37,21 @@ Po uruchomieniu pojawia się **menu główne**:
 - **Programy:** 3 gwiazdki za najkrótszy program, 2 za o jeden krok dłuższy, 1 za resztę.
 - Poprawienie wyniku dodaje brakujące gwiazdki.
 
+## Punkty i rangi
+- Za każde zlecenie i program: **baza (trudność poziomu) × gwiazdki (1★ 50%, 2★ 75%, 3★ 100%) × 1,2 bez podpowiedzi**. Liczy się najlepszy wynik każdego poziomu – powtarzanie nie nabija punktów.
+- Rangi: Praktykant → Operator (500) → Technik automatyk (1500) → Programista robotów (3500) → Integrator (7000) → Inżynier automatyki (12000) → Główny automatyk (20000). Przy typowej grze awanse wypadają ok. przy zleceniach 10, 23, 46, 86, 143; najwyższa ranga wymaga 3 gwiazdek i programów.
+- Menu → **Ranking**: ranga, pasek postępu, lista rang, statystyki. Wzory i progi: `scripts/score.gd`.
+
+## Tryb programowania – krzywa trudności
+| Programy | Produkty | Puste palety | Najkrótszy program |
+|---|---|---|---|
+| 1–3 (samouczek) | 2 | 2 | 2–4 kroki |
+| 4–10 | 3 | 2 | 3–6 |
+| 11–20 | 3→4 | 2 | 5–8 |
+| 21–35 | 4 | 2→1 | 7–10 |
+| 36–60 | 5 | 2→1 | 8–12 |
+Co 5. program jest łatwiejszy. **Podgląd** pokazuje palety po wykonaniu obecnych kroków: za darmo w programach 1–3, potem za 1 podpowiedź.
+
 ## Wybór poziomu (tylko do testów)
 Przycisk **Poziom** (u góry) otwiera okno: wpisz numer zlecenia albo użyj „–”/„+” i naciśnij **Zatwierdź**. Wybrany poziom zapisuje się jako bieżący postęp.
 

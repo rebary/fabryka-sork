@@ -22,6 +22,8 @@ func _init() -> void:
 	test_optimal()
 	test_stars()
 	test_intro_levels()
+	test_score()
+	test_program_curve()
 	test_programs(30)
 	test_precomputed_data()
 	test_hints_no_loops(45)
@@ -153,6 +155,36 @@ func test_intro_levels() -> void:
 		var n: int = LevelGenerator.INTRO_LEVEL[m]
 		var p := LevelGenerator.params_for_level(n)
 		check(p["intro"] == m and p["mods"].has(m), "nowość %s pojawia się na zleceniu %d" % [m, n])
+
+
+func test_score() -> void:
+	var p := LevelGenerator.params_for_level(20)
+	var base := Score.campaign_base(p)
+	check(Score.points(base, 3, 0) > Score.points(base, 3, 1), "premia za grę bez podpowiedzi")
+	check(Score.points(base, 3, 1) > Score.points(base, 2, 1) and Score.points(base, 2, 1) > Score.points(base, 1, 1), "więcej gwiazdek = więcej punktów")
+	check(Score.campaign_base(LevelGenerator.params_for_level(50)) > Score.campaign_base(LevelGenerator.params_for_level(2)), "trudniejsze zlecenie = wyższa baza")
+	check(Score.program_base(10) > Score.program_base(3), "dłuższy program = wyższa baza")
+	check(Score.rank_for(0)["name"] == "Praktykant" and Score.rank_for(499)["index"] == 0 and Score.rank_for(500)["index"] == 1, "progi rang")
+	check(Score.rank_for(999999)["next_min"] == -1, "najwyższa ranga nie ma następnej")
+	var mins: Array = []
+	for r in Score.RANKS:
+		mins.append(r["min"])
+	var sorted_mins := mins.duplicate()
+	sorted_mins.sort()
+	check(mins == sorted_mins, "rangi uporządkowane rosnąco")
+
+
+func test_program_curve() -> void:
+	for n in range(1, 4):
+		var g := LevelGenerator.generate_program(n)
+		check(g.optimal <= 4 and g.board.stacks.size() - 2 <= 2, "program %d jest samouczkiem (krótki, 2 produkty)" % n)
+	var prev_types := 0
+	for n in range(1, 61):
+		var pp := LevelGenerator.program_params(n)
+		if not pp["breather"]:
+			check(pp["types"] >= prev_types, "program %d: liczba produktów nie maleje (poza przerwami)" % n)
+			prev_types = pp["types"]
+		check(pp["slack"] >= 1, "program %d: jest zapas kroków" % n)
 
 
 func test_stars() -> void:
