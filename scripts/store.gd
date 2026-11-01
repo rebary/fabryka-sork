@@ -16,6 +16,10 @@ const PRODUCTS := {
 	"hints_5": {"hints": 5, "title": "5 podpowiedzi"},
 	"hints_15": {"hints": 15, "title": "15 podpowiedzi"},
 	"hints_40": {"hints": 40, "title": "40 podpowiedzi"},
+	# Pakiety wyglądu: tylko kosmetyka, jednorazowy zakup (w Google Play: produkt "nonconsumable").
+	"cosmetic_neon": {"pack": true, "title": "Pakiet Neon", "desc": "neonowy robot, hala neonowa, pojemniki neonowe"},
+	"cosmetic_gala": {"pack": true, "title": "Pakiet Gala", "desc": "złoty robot, lustrzana posadzka, reflektory sceniczne"},
+	"cosmetic_future": {"pack": true, "title": "Pakiet Hala przyszłości", "desc": "hala przyszłości, okna z zorzą"},
 }
 
 var test_mode := true

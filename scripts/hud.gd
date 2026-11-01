@@ -80,6 +80,7 @@ var btn_menu_sound: Button
 var btn_menu_fx: Button
 var btn_menu_rank: Button
 var btn_menu_duel: Button
+var btn_test_stars: Button
 var duel_layer: Control
 var lbl_duel_league: Label
 var lbl_duel_info: Label
@@ -380,6 +381,8 @@ func show_menu() -> void:
 	btn_menu_campaign.text = "Kampania – zlecenie %d" % Save.level
 	btn_menu_program.text = "Programowanie robota – program %d" % Save.program
 	btn_menu_decor.text = "Rozbudowa hali – %d" % Save.stars_available()
+	if btn_test_stars != null:
+		btn_test_stars.text = "Test: gwiazdki bez limitu – %s" % ("WŁ." if Save.test_unlimited_stars else "wył.")
 	btn_menu_duel.text = "Pojedynek – liga %s (%d)" % [Duel.league_for(Save.duel_rating)["name"], Save.duel_rating]
 	var rk := Score.rank_for(Save.total_points())
 	btn_menu_rank.text = "Ranking – %s (%d pkt)" % [rk["name"], Save.total_points()]
@@ -468,6 +471,8 @@ func _build_shop() -> void:
 	ad.custom_minimum_size = Vector2(480, 96)
 	v.add_child(ad)
 	for id in Store.PRODUCTS:
+		if not Store.PRODUCTS[id].has("hints"):
+			continue  # pakiety wyglądu są w "Rozbudowie hali"
 		var b := _button(id, func(): buy_pressed.emit(id))
 		b.custom_minimum_size = Vector2(480, 96)
 		v.add_child(b)
@@ -614,6 +619,14 @@ func _build_menu() -> void:
 		var b2 := _button("Test: wybierz program", func(): show_level_picker(Save.program, true), 20)
 		b2.custom_minimum_size = Vector2(0, 76)
 		test_row.add_child(b2)
+		var b3 := _button("", func():
+			Save.test_unlimited_stars = not Save.test_unlimited_stars
+			Save.save()
+			show_menu(), 20)
+		b3.custom_minimum_size = Vector2(560, 70)
+		b3.set_meta("unlimited_toggle", true)
+		v.add_child(b3)
+		btn_test_stars = b3
 
 
 func _menu_button(cb: Callable) -> Button:
@@ -638,7 +651,7 @@ func _build_decor() -> void:
 	row.add_child(icon)
 	v.add_child(row)
 	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(560, 640)
+	scroll.custom_minimum_size = Vector2(540, 640)
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	v.add_child(scroll)
 	decor_list = VBoxContainer.new()
@@ -646,7 +659,9 @@ func _build_decor() -> void:
 	decor_list.add_theme_constant_override("separation", 8)
 	scroll.add_child(decor_list)
 	var note := _label(20, COL_MUTED)
-	note.text = "Gwiazdki zdobywasz w zleceniach i programach.\nOzdoby zmieniają tylko wygląd hali."
+	note.text = "Gwiazdki zdobywasz w zleceniach, programach i pojedynkach. Złote przyciski to pakiety płatne (tryb testowy). Ozdoby zmieniają tylko wygląd."
+	note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	note.custom_minimum_size = Vector2(540, 0)
 	note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(note)
 	var close := _button("Zamknij", func():
@@ -657,7 +672,7 @@ func _build_decor() -> void:
 
 
 func refresh_decor() -> void:
-	lbl_decor_stars.text = "Dostępne gwiazdki: %d " % Save.stars_available()
+	lbl_decor_stars.text = ("Gwiazdki: bez limitu (tryb testowy) " if Save.unlimited_stars() else "Dostępne gwiazdki: %d " % Save.stars_available())
 	for c in decor_list.get_children():
 		c.queue_free()
 	for s in Decor.SLOTS:
@@ -668,17 +683,30 @@ func refresh_decor() -> void:
 			var selected: bool = Save.decor_of(s["id"]) == it["id"]
 			var owned: bool = Save.owns(it["id"])
 			var text: String = it["name"]
+			var premium: bool = it.has("premium")
+			var slot_id: String = s["id"]
+			var item_id: String = it["id"]
 			if selected:
 				text += " – wybrane"
 			elif owned:
 				text += " – wybierz"
+			elif premium:
+				var pid: String = it["premium"]
+				text += "\n%s – %s" % [Store.PRODUCTS[pid]["title"], Store.price_text(pid)]
 			else:
 				text += " – %d" % it["price"]
-			var slot_id: String = s["id"]
-			var item_id: String = it["id"]
-			var b := _button(text, func(): decor_chosen.emit(slot_id, item_id), 24)
-			b.custom_minimum_size = Vector2(0, 76)
-			if not owned:
+			var b: Button
+			if premium and not owned:
+				var pid2: String = it["premium"]
+				b = _button(text, func():
+					show_busy("Przetwarzanie zakupu (test)…")
+					buy_pressed.emit(pid2), 22)
+				b.add_theme_stylebox_override("normal", _box(Color("#3d2f0c"), Color("#f2c14e"), 3))
+				b.custom_minimum_size = Vector2(0, 92)
+			else:
+				b = _button(text, func(): decor_chosen.emit(slot_id, item_id), 24)
+				b.custom_minimum_size = Vector2(0, 76)
+			if not owned and not premium:
 				b.icon = star_icon
 				b.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 				b.disabled = Save.stars_available() < int(it["price"])

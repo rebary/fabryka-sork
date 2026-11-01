@@ -32,6 +32,11 @@ Po uruchomieniu pojawia się **menu główne**:
 - **Programowanie robota** – osobny tryb. Gracz układa program (listę kroków „paleta » paleta”), a dopiero potem naciska **START**. W trakcie programowania plansza się nie zmienia, więc skutki kroków trzeba przewidzieć. Błędny krok zatrzymuje robota komunikatem „BŁĄD PROGRAMU” i wskazuje przyczynę; „Edytuj” wraca do edycji. Palety mieszczą po 3 paczki, a każdy program ma znane najkrótsze rozwiązanie i limit kroków.
 - **Rozbudowa hali** – ozdoby kupowane za gwiazdki: kolor robota, ściana, posadzka, oświetlenie, zegar lub tablica wyników, zieleń, ramię robota w tle. Ozdoby zmieniają tylko wygląd i nie są sprzedawane za pieniądze.
 
+## Rozbudowa hali i pakiety wyglądu
+- Za gwiazdki (10 miejsc): kolor robota, **wygląd paczek** (kartony, skrzynie drewniane, pojemniki metalowe), ściana, posadzka, **taśmociąg**, oświetlenie, **okna** (dzień, noc z gwiazdami), zegar/tablica, zieleń, **roboty w tle** (jedno lub dwa ramiona).
+- **Pakiety płatne** (jednorazowy zakup, tylko wygląd, bez losowania): **Neon** (mieniący się robot, hala neonowa, pojemniki neonowe), **Gala** (złoty robot, lustrzana posadzka, reflektory sceniczne), **Hala przyszłości** (hala przyszłości, okna z zorzą). W Google Play będą to produkty jednorazowe („non-consumable”); identyfikatory w `scripts/store.gd`.
+- **Tryb testowy:** w menu (tylko wersja testowa) przycisk **„Test: gwiazdki bez limitu”** – pozwala wybierać wszystkie ozdoby za gwiazdki bez ich wydawania. Pakiety płatne kupuje się wtedy w symulowanym sklepie (bez pieniędzy).
+
 ## Gwiazdki
 - **Kampania:** 3 gwiazdki za wynik nie gorszy niż wzorzec ruchów (pokazywany po wygranej), 2 za wynik blisko wzorca, 1 za resztę. Zmiana chwytaka liczy się jako ruch.
 - **Programy:** 3 gwiazdki za najkrótszy program, 2 za o jeden krok dłuższy, 1 za resztę.

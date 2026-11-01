@@ -25,6 +25,7 @@ func _init() -> void:
 	test_score()
 	test_program_curve()
 	test_duel()
+	test_decor_catalog()
 	test_programs(30)
 	test_precomputed_data()
 	test_hints_no_loops(45)
@@ -241,6 +242,23 @@ func test_duel() -> void:
 	check(ghost.done and absf(gt - 30.0) < 0.2, "symulacja znajomego kończy w jego czasie (%.2f s zamiast 30 s)" % gt)
 	check(strong_t < weak_t, "silniejszy rywal jest szybszy (%.0f s vs %.0f s)" % [strong_t / 3.0, weak_t / 3.0])
 	print("Rywal najsłabszy: średnio %.0f s, najsilniejszy: %.0f s na planszę" % [weak_t / 3.0, strong_t / 3.0])
+
+
+func test_decor_catalog() -> void:
+	var products: Dictionary = preload("res://scripts/store.gd").PRODUCTS
+	var ids := {}
+	for sl in Decor.SLOTS:
+		var first: Dictionary = sl["items"][0]
+		check(int(first.get("price", -1)) == 0 and not first.has("premium"), "miejsce %s: pierwsza ozdoba darmowa" % sl["id"])
+		for it in sl["items"]:
+			check(not ids.has(it["id"]), "ozdoba %s ma unikalny identyfikator" % it["id"])
+			ids[it["id"]] = true
+			check(it.has("premium") != it.has("price"), "ozdoba %s: albo cena w gwiazdkach, albo pakiet" % it["id"])
+			if it.has("premium"):
+				check(products.has(it["premium"]) and products[it["premium"]].get("pack", false), "ozdoba %s należy do istniejącego pakietu" % it["id"])
+	for pid in products:
+		if products[pid].get("pack", false):
+			check(Decor.items_in_pack(pid).size() >= 2, "pakiet %s zawiera co najmniej 2 ozdoby" % pid)
 
 
 func test_stars() -> void:

@@ -28,6 +28,8 @@ var duel_wins: int = 0
 var duel_losses: int = 0
 var duel_star_day: String = ""
 var duel_stars_today: int = 0
+## TYLKO W WERSJI TESTOWEJ: nieograniczone gwiazdki (do oglądania ozdób). W wersji do sklepu ignorowane.
+var test_unlimited_stars: bool = false
 
 
 func _ready() -> void:
@@ -67,6 +69,7 @@ func load_data() -> void:
 	duel_losses = int(cfg.get_value("duel", "losses", 0))
 	duel_star_day = str(cfg.get_value("duel", "star_day", ""))
 	duel_stars_today = int(cfg.get_value("duel", "stars_today", 0))
+	test_unlimited_stars = bool(cfg.get_value("test", "unlimited_stars", false))
 
 
 func save() -> void:
@@ -95,6 +98,7 @@ func save() -> void:
 	cfg.set_value("duel", "losses", duel_losses)
 	cfg.set_value("duel", "star_day", duel_star_day)
 	cfg.set_value("duel", "stars_today", duel_stars_today)
+	cfg.set_value("test", "unlimited_stars", test_unlimited_stars)
 	cfg.save(PATH)
 
 
@@ -117,7 +121,13 @@ func total_stars() -> int:
 	return n
 
 
+func unlimited_stars() -> bool:
+	return test_unlimited_stars and OS.is_debug_build()
+
+
 func stars_available() -> int:
+	if unlimited_stars():
+		return 99999
 	return total_stars() - stars_spent
 
 
@@ -126,16 +136,22 @@ func decor_of(slot_id: String) -> String:
 
 
 func owns(item_id: String) -> bool:
-	return Decor.item(item_id).get("price", 0) == 0 or decor_owned.has(item_id)
+	var it := Decor.item(item_id)
+	if it.has("premium"):
+		return decor_owned.has(item_id)
+	return int(it.get("price", 0)) == 0 or decor_owned.has(item_id)
 
 
 ## Kupuje (jeśli trzeba) i ustawia ozdobę. Zwraca false, gdy brakuje gwiazdek.
 func choose_decor(slot_id: String, item_id: String) -> bool:
 	if not owns(item_id):
+		if Decor.is_premium(item_id):
+			return false  # pakiet kupuje się w sklepie (Store), nie za gwiazdki
 		var price: int = Decor.item(item_id)["price"]
 		if stars_available() < price:
 			return false
-		stars_spent += price
+		if not unlimited_stars():
+			stars_spent += price
 		decor_owned.append(item_id)
 	decor_selected[slot_id] = item_id
 	save()
@@ -177,3 +193,14 @@ func award_duel_star() -> int:
 	duel_stars_today += Duel.STARS_PER_WIN
 	stars_spent -= Duel.STARS_PER_WIN  # gwiazdki z pojedynków zwiększają pulę do wydania
 	return Duel.STARS_PER_WIN
+
+
+## Odblokowuje ozdoby z kupionego pakietu wyglądu.
+func unlock_pack(product_id: String) -> Array:
+	var unlocked: Array = []
+	for id in Decor.items_in_pack(product_id):
+		if not decor_owned.has(id):
+			decor_owned.append(id)
+			unlocked.append(id)
+	save()
+	return unlocked

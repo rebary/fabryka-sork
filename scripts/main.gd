@@ -926,6 +926,14 @@ func _on_purchase_finished(product_id: String, success: bool) -> void:
 	if not success:
 		hud.show_msg("Zakup nie został zrealizowany", 3.0)
 		return
+	if Store.PRODUCTS[product_id].get("pack", false):
+		Save.unlock_pack(product_id)
+		Sfx.play("reward")
+		fx.confetti(get_viewport_rect().size.x)
+		hud.refresh_decor()
+		hud.show_msg("Odblokowano: %s" % Store.PRODUCTS[product_id]["title"], 3.0)
+		queue_redraw()
+		return
 	var n: int = Store.PRODUCTS[product_id]["hints"]
 	Save.wallet.add(n)
 	Save.save()
@@ -1250,9 +1258,25 @@ func _draw_hall(vs: Vector2) -> void:
 			for x in range(-shift, int(vs.x), 68):
 				draw_line(Vector2(x, y), Vector2(x, y + 26), Color(0, 0, 0, 0.18), 2)
 			row += 1
+	elif wall.get("neon_grid", false):
+		# Neonowa siatka w perspektywie.
+		var hz := floor_y - 260.0
+		for k in range(-8, 9):
+			var a := 0.25 + 0.15 * sin(time * 1.5 + k)
+			draw_line(Vector2(vs.x / 2.0 + k * 30, hz), Vector2(vs.x / 2.0 + k * 140, floor_y), Color(1.0, 0.17, 0.84, a), 2)
+		for j in 8:
+			var t := pow(j / 8.0, 1.6)
+			var y := lerpf(hz, floor_y, t)
+			draw_line(Vector2(0, y), Vector2(vs.x, y), Color(0.16, 0.9, 1.0, 0.18 + 0.2 * t), 2)
+	elif wall.get("future", false):
+		for k in 6:
+			var x := vs.x * (k + 0.5) / 6.0
+			draw_rect(Rect2(x - 40, 40, 80, floor_y - 80), Color(1, 1, 1, 0.05))
+			draw_line(Vector2(x - 40, 40), Vector2(x - 40, floor_y - 40), Color(0.6, 0.95, 1.0, 0.25 + 0.15 * sin(time * 2.0 + k)), 2)
 	else:
 		for x in range(60, int(vs.x), 120):
 			draw_line(Vector2(x, 0), Vector2(x, floor_y), Color(1, 1, 1, 0.025), 2)
+	_draw_windows(vs)
 	_draw_backdrop(vs, floor_y)
 	_draw_lights(vs)
 	_draw_sign(vs)
@@ -1264,16 +1288,26 @@ func _draw_hall(vs: Vector2) -> void:
 			draw_line(Vector2(x, floor_y), Vector2(x, vs.y), Color(0, 0, 0, 0.25), 2)
 		for y in range(int(floor_y), int(vs.y), 22):
 			draw_line(Vector2(0, y), Vector2(vs.x, y), Color(0, 0, 0, 0.25), 2)
+	if fl.get("mirror", false):
+		_grad_v(Rect2(0, floor_y, vs.x, vs.y - floor_y), Color(0.55, 0.65, 0.8, 0.18), Color(0, 0, 0, 0))
+		var sx_ := fmod(time * 120.0, vs.x + 400.0) - 200.0
+		draw_colored_polygon(PackedVector2Array([Vector2(sx_, floor_y), Vector2(sx_ + 60, floor_y), Vector2(sx_ - 40, vs.y), Vector2(sx_ - 100, vs.y)]), Color(1, 1, 1, 0.08))
 	for x in range(-20, int(vs.x) + 20, 28):
 		draw_colored_polygon(PackedVector2Array([Vector2(x, floor_y), Vector2(x + 14, floor_y), Vector2(x + 4, floor_y + 10), Vector2(x - 10, floor_y + 10)]), Color("#e0b000"))
 	_draw_arm(vs, floor_y)
 	_draw_plants(vs, floor_y)
 	# Taśmociąg w tle z przejeżdżającymi kartonami.
 	var belt_y := floor_y + 22.0
-	draw_rect(Rect2(0, belt_y, vs.x, 18), COL_STEEL_DARK)
+	var belt := Decor.item(Save.decor_of("belt"))
+	draw_rect(Rect2(0, belt_y, vs.x, 18), Color(belt.get("color", "#343a43")))
 	var off := fmod(time * 60.0, 24.0)
-	for x in range(-24, int(vs.x) + 24, 24):
-		draw_line(Vector2(x + off, belt_y + 3), Vector2(x + off + 8, belt_y + 15), COL_STEEL, 2)
+	if belt.get("rollers", false):
+		for x in range(-24, int(vs.x) + 24, 16):
+			draw_circle(Vector2(x + fmod(time * 60.0, 16.0), belt_y + 9), 6, COL_STEEL)
+			draw_circle(Vector2(x + fmod(time * 60.0, 16.0), belt_y + 9), 2, COL_STEEL_DARK)
+	else:
+		for x in range(-24, int(vs.x) + 24, 24):
+			draw_line(Vector2(x + off, belt_y + 3), Vector2(x + off + 8, belt_y + 15), Color(belt.get("color", "#343a43")).lightened(0.25), 2)
 	for k in 3:
 		var bx := fmod(time * 60.0 + k * vs.x / 3.0, vs.x + 80.0) - 40.0
 		var col: Color = PRODUCT_COLORS[(k * 3 + 1) % PRODUCT_COLORS.size()].darkened(0.35)
@@ -1284,6 +1318,34 @@ func _draw_hall(vs: Vector2) -> void:
 	draw_rect(Rect2(0, rail_y + 6, vs.x, 4), COL_STEEL_DARK)
 	for x in range(0, int(vs.x), 36):
 		draw_line(Vector2(x, rail_y - 10), Vector2(x + 18, rail_y + 6), COL_STEEL, 3)
+
+
+## Okna wysoko na ścianie (ozdoba): dzień, noc z gwiazdami albo zorza.
+func _draw_windows(vs: Vector2) -> void:
+	var kind := Save.decor_of("windows")
+	if kind == "windows_none":
+		return
+	for k in 4:
+		var r := Rect2(vs.x * (0.06 + 0.24 * k), 118, vs.x * 0.16, 64)
+		match kind:
+			"windows_day":
+				_grad_v(r, Color("#4f77a8"), Color("#9cc3e6"))
+				draw_circle(r.position + Vector2(r.size.x * 0.7, 18), 7, Color(1, 1, 1, 0.5))
+			"windows_night":
+				_grad_v(r, Color("#070b1a"), Color("#1b2547"))
+				for st in 6:
+					var p := r.position + Vector2(fmod(st * 37.0 + k * 11.0, r.size.x), fmod(st * 23.0 + k * 7.0, r.size.y))
+					draw_circle(p, 1.4, Color(1, 1, 1, 0.5 + 0.5 * sin(time * 3.0 + st + k)))
+			"windows_aurora":
+				_grad_v(r, Color("#050914"), Color("#0e1a33"))
+				for b in 3:
+					var pts := PackedVector2Array()
+					for x in 9:
+						var px := r.position.x + r.size.x * x / 8.0
+						pts.append(Vector2(px, r.position.y + 16 + b * 12 + sin(time * 1.2 + x * 0.8 + b + k) * 8))
+					draw_polyline(pts, [Color(0.3, 1.0, 0.6, 0.45), Color(0.6, 0.4, 1.0, 0.4), Color(0.2, 0.8, 1.0, 0.35)][b], 5.0)
+		draw_rect(r, COL_STEEL, false, 3.0)
+		draw_line(Vector2(r.get_center().x, r.position.y), Vector2(r.get_center().x, r.end.y), COL_STEEL, 2)
 
 
 ## Głębia hali: świetliki z promieniami światła, regały w oddali i unoszący się kurz.
@@ -1317,6 +1379,17 @@ func _draw_backdrop(vs: Vector2, floor_y: float) -> void:
 
 func _draw_lights(vs: Vector2) -> void:
 	match Save.decor_of("lights"):
+		"lights_stage":
+			var cols := [Color(1.0, 0.85, 0.4), Color(0.5, 0.8, 1.0), Color(1.0, 0.4, 0.8)]
+			for k in 3:
+				var src := Vector2(vs.x * (0.15 + 0.35 * k), 0)
+				var ang := sin(time * (0.6 + 0.2 * k) + k * 2.0) * 0.45
+				var dir := Vector2(sin(ang), cos(ang))
+				var tip := src + dir * (vs.y - 190.0)
+				var side := Vector2(dir.y, -dir.x) * 120.0
+				draw_colored_polygon(PackedVector2Array([src - side * 0.1, src + side * 0.1, tip + side, tip - side]), Color(cols[k], 0.06))
+				draw_circle(tip, 70, Color(cols[k], 0.05))
+				draw_rect(Rect2(src.x - 14, 0, 28, 16), COL_STEEL_DARK)
 		"lights_lamps":
 			for k in 3:
 				var x := vs.x * (k + 0.5) / 3.0
@@ -1380,11 +1453,17 @@ func _draw_plants(vs: Vector2, floor_y: float) -> void:
 
 ## Ramię przemysłowe w tle, które przekłada kartony z taśmociągu (tylko ozdoba).
 func _draw_arm(vs: Vector2, floor_y: float) -> void:
-	if Save.decor_of("arm") != "arm_robot":
+	var kind := Save.decor_of("arm")
+	if kind == "arm_none":
 		return
-	var base := Vector2(vs.x - 70, floor_y + 16)
-	var a1 := -PI / 2.0 + 0.5 * sin(time * 0.9)
-	var a2 := a1 + 1.2 + 0.4 * sin(time * 1.3)
+	_draw_one_arm(Vector2(vs.x - 70, floor_y + 16), 0.0, 1.0)
+	if kind == "arm_two":
+		_draw_one_arm(Vector2(70, floor_y + 16), 1.7, -1.0)
+
+
+func _draw_one_arm(base: Vector2, phase: float, mirror: float) -> void:
+	var a1 := -PI / 2.0 + mirror * 0.5 * sin(time * 0.9 + phase)
+	var a2 := a1 + mirror * (1.2 + 0.4 * sin(time * 1.3 + phase))
 	var j1 := base + Vector2.from_angle(a1) * 70
 	var j2 := j1 + Vector2.from_angle(a2) * 55
 	var col := Color("#e8a100")
@@ -1515,6 +1594,10 @@ func _draw_box(rect: Rect2, v: int, force_wrapped: bool = false) -> void:
 		_draw_wrapped(inner)
 		return
 	var col: Color = PRODUCT_COLORS[v % PRODUCT_COLORS.size()]
+	var skin := Save.decor_of("boxes")
+	if skin != "boxes_carton":
+		_draw_box_skin(inner, v, col, skin)
+		return
 	draw_style_box(_box_style(v), inner)
 	# Cieniowanie: jaśniej u góry, ciemniej u dołu.
 	var body := inner.grow(-4)
@@ -1537,6 +1620,43 @@ func _draw_box(rect: Rect2, v: int, force_wrapped: bool = false) -> void:
 		var bx := tag.position.x + 3 + k * (tag.size.x - 6) / 7.0
 		var bw := 1.0 + float((v * 3 + k) % 3) * 0.7
 		draw_rect(Rect2(bx, tag.position.y + 3, bw, tag.size.y - 6), Color(0.1, 0.1, 0.1))
+
+
+## Inne wyglądy paczek: skrzynie, pojemniki metalowe, neon. Kolor i symbol produktu zawsze widoczne.
+func _draw_box_skin(inner: Rect2, v: int, col: Color, skin: String) -> void:
+	var s := minf(inner.size.x, inner.size.y) * 0.24
+	var c := inner.get_center()
+	match skin:
+		"boxes_crate":
+			draw_rect(Rect2(inner.position + Vector2(2, 4), inner.size), Color(0, 0, 0, 0.3))
+			_grad_v(inner, Color("#c89056"), Color("#8f5f33"))
+			for k in range(1, 4):
+				var y := inner.position.y + inner.size.y * k / 4.0
+				draw_line(Vector2(inner.position.x, y), Vector2(inner.end.x, y), Color(0, 0, 0, 0.25), 1.5)
+			draw_rect(inner, Color("#5e3b1c"), false, 3.0)
+			draw_rect(Rect2(inner.position.x, c.y - inner.size.y * 0.22, inner.size.x, inner.size.y * 0.44), Color(col, 0.9))
+			_draw_icon(v, c, s, Color.WHITE)
+		"boxes_metal":
+			draw_rect(Rect2(inner.position + Vector2(2, 4), inner.size), Color(0, 0, 0, 0.3))
+			_grad_h(inner, Color("#59636f"), Color("#b8c2ce"), Color("#59636f"))
+			for k in range(1, 6):
+				var x := inner.position.x + inner.size.x * k / 6.0
+				draw_line(Vector2(x, inner.position.y + 3), Vector2(x, inner.end.y - 3), Color(0, 0, 0, 0.18), 2)
+			draw_rect(inner, Color("#3a414b"), false, 2.0)
+			var plate := Rect2(c - Vector2(s * 1.6, s * 1.25), Vector2(s * 3.2, s * 2.5))
+			draw_rect(plate, col)
+			draw_rect(plate, col.darkened(0.4), false, 2.0)
+			_draw_icon(v, c, s * 0.85, Color.WHITE)
+		"boxes_neon":
+			draw_rect(inner, Color("#120a1c"))
+			var pulse := 0.6 + 0.4 * sin(time * 3.0 + v)
+			for g in 3:
+				draw_rect(inner.grow(-g * 2), Color(col, (0.9 - g * 0.3) * pulse), false, 2.0)
+			draw_circle(c, s * 1.5, Color(col, 0.15))
+			_draw_icon(v, c, s, col.lightened(0.3))
+		_:
+			draw_style_box(_box_style(v), inner)
+			_draw_icon(v, c, s, Color.WHITE)
 
 
 func _draw_wrapped(inner: Rect2) -> void:
@@ -1646,7 +1766,10 @@ func _draw_cable_chain(cart_x: float) -> void:
 func _draw_robot() -> void:
 	var st := _robot_state()
 	var grip: Vector2 = st["grip"]
-	var robot_col := Color(Decor.item(Save.decor_of("robot"))["color"])
+	var robot_item := Decor.item(Save.decor_of("robot"))
+	var robot_col := Color(robot_item["color"])
+	if robot_item.get("neon", false):
+		robot_col = Color.from_hsv(fmod(time * 0.15, 1.0), 0.75, 1.0)
 	var n_load: int = anim["n"] if not anim.is_empty() else 0
 	if st["load"] != null:
 		var top_left: Vector2 = st["load"]
@@ -1668,6 +1791,9 @@ func _draw_robot() -> void:
 	draw_style_box(sb, cart)
 	_grad_v(cart.grow(-3), Color(1, 1, 1, 0.28), Color(0, 0, 0, 0.22))
 	draw_rect(Rect2(cart.position.x + 6, cart.position.y + 5, cart.size.x - 12, 3), Color(1, 1, 1, 0.35))
+	if robot_item.get("gold", false):
+		var gx := cart.position.x + fmod(time * 60.0, cart.size.x + 40.0) - 20.0
+		draw_colored_polygon(PackedVector2Array([Vector2(gx, cart.position.y + 3), Vector2(gx + 10, cart.position.y + 3), Vector2(gx - 4, cart.end.y - 3), Vector2(gx - 14, cart.end.y - 3)]), Color(1, 1, 1, 0.45))
 	var led_col := COL_DONE
 	if prog_state == "fault" or fault_time > 0.0:
 		led_col = COL_FAULT
