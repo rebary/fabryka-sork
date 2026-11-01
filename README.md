@@ -7,13 +7,14 @@ Nazwa jest robocza. Przed publikacją sprawdź, czy nie jest zajęta w Google Pl
 **Status:** prototyp do testów grywalności. To nie jest gotowy produkt. Sklep i reklamy działają tylko w **trybie testowym** (bez prawdziwych płatności i reklam).
 
 ## Szybki test w przeglądarce
-`FabrykaSort.html` – cała gra w jednym pliku: otwórz dwuklikiem w Chrome/Edge. Budowa: `tools/build_single_html.py` (instrukcja w `docs/01_INSTALACJA_NA_TELEFONIE.md`).
+`FabrykaSort.html` – cała gra w jednym pliku dla testerów (bez przycisków testowych), `FabrykaSort_dla_mnie.html` – z przyciskami testowymi. Otwórz dwuklikiem w Chrome/Edge. Budowa: `tools/build_single_html.py` (instrukcja w `docs/01_INSTALACJA_NA_TELEFONIE.md`).
 
 ## Dokumenty
 - `docs/01_INSTALACJA_NA_TELEFONIE.md` – jak zbudować APK i zainstalować grę na telefonie
 - `docs/02_PUBLIKACJA_GOOGLE_PLAY.md` – jak tanio opublikować grę w Google Play
 - `docs/03_PLAN_WDROZENIA.md` – etapy od testów do premiery, kryteria decyzji, ryzyka
 - `docs/04_KAMPANIA_MARKETINGOWA.md` – pozycjonowanie, teksty do sklepu, kanały, kalendarz
+- `docs/07_START_TESTOW.md` – **lista kroków do startu testów z graczami** (wiadomość do testerów, decyzje po tygodniu)
 - `docs/06_HIERARCHIA_UTRUDNIEN.md` – pomiar wpływu utrudnień i ich kolejność (`tools/analyze_modifiers.gd`)
 - `docs/05_ANKIETA_I_ANALIZA.md` – ankieta w grze, arkusz Google z automatyczną analizą (`docs/ankieta/Code.gs`)
 
@@ -86,7 +87,7 @@ Przycisk jest widoczny tylko w edytorze i w wersjach testowych (debug). W wersji
 | 23 | Nowość: **wymiana chwytaków** – próżnia (cały ciąg albo nic), widły (do 2), szczęki (1). Zmiana kosztuje ruch |
 | 28 | Nowość: **śliskie paczki** – z szansą 4% paczka wyślizguje się i spada z powrotem; ruch przepada i nie da się go cofnąć. Przy limicie ruchów generator dolicza zapas |
 | 33 | Nowość: **limit ruchów** – cofnięcie zwraca ruch |
-| 41 | Nowość: **folia stretch** – paczki owinięte folią są ukryte, dopóki nie trafią na górę palety. Start od 20% owiniętych paczek, rośnie do 80% około zlecenia 150 |
+| 41 | Nowość: **folia stretch** – paczki owinięte folią są ukryte, dopóki nie trafią na górę palety. Start od 10% paczek w folii (2–3 sztuki), rośnie powoli do najwyżej 50% około zlecenia 150; liczba jest stała, nie losowa |
 | 44+ | Utrudnienia na przemian wg hierarchii (lżejsze częściej, folia rzadziej); pary z folią od 80, folia + limit od 110 |
 | co 5. (od 10.) | Zlecenie „przerwa”: łatwiejsze, bez utrudnień |
 

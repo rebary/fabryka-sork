@@ -37,9 +37,12 @@ Najcięższe połączenia: **folia + limit** (brak informacji i brak zapasu ruch
 |---|---|---|
 | Kolejność nowości | folia 18, limit 23, palety na 5 28, chwytaki 33, śliskie 41 | **palety na 5 – 18, chwytaki – 23, śliskie – 28, limit – 33, folia – 41** |
 | Udział w zleceniach 1–150 | folia 16%, palety 14%, limit 13%, chwytaki 13%, śliskie 11% | **palety 19%, chwytaki 16%, limit 16%, śliskie 9%, folia 7%** |
-| Folia – odsetek owiniętych | 35% → 90% (do zlecenia ~90) | **20% przy wprowadzeniu, 25% → 80% (do ~150)** |
+| Folia – odsetek owiniętych | 35% → 90% (do zlecenia ~90) | **10% przy wprowadzeniu, 12% → najwyżej 50% (do ~150), liczba paczek wyliczana dokładnie** |
 | Pary utrudnień | dowolne, od zlecenia 43 | lekkie pary od 44; **pary z folią od 80; folia + limit od 110** |
 
 ## Co dalej
 - Po testach z ludźmi porównać ankiety („za trudna”) z numerem zlecenia – jeśli skargi skupiają się przy konkretnym utrudnieniu, przesunąć je dalej lub zmniejszyć natężenie.
 - Po każdej zmianie: `tools/analyze_modifiers.gd` → `tools/precompute_levels.gd` → testy.
+
+## Poprawka po teście (01.11.2026)
+Zgłoszenie z testu: na zleceniu 47 folii było „o wiele za dużo”. Przyczyna: liczba paczek w folii była losowana (każda paczka osobno), a generator wybierał trudniejsze plansze – zlecenie 47 miało 11 z 24 paczek w folii (45%) zamiast planowanych ~28%. Teraz liczba jest wyliczana dokładnie (losowe są tylko miejsca), a krzywa łagodniejsza: zlecenie 41 – 2 paczki, 47 – 3, 59 – 4, 84 – 6, maksymalnie połowa paczek około zlecenia 150. Test pilnuje dokładnej liczby i limitu 50%.

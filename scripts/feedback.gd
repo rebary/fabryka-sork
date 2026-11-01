@@ -58,7 +58,9 @@ func flush() -> void:
 	var body: Dictionary = Save.feedback_pending[0].duplicate()
 	body["key"] = SHARED_KEY
 	sending = true
-	var err := http.request(endpoint, ["Content-Type: application/json"], HTTPClient.METHOD_POST, JSON.stringify(body))
+	# text/plain (a nie application/json): w wersji przeglądarkowej to "proste" zapytanie,
+	# które przeglądarka wysyła do Google bez dodatkowej kontroli CORS. Skrypt czyta je tak samo.
+	var err := http.request(endpoint, ["Content-Type: text/plain;charset=utf-8"], HTTPClient.METHOD_POST, JSON.stringify(body))
 	if err != OK:
 		sending = false
 

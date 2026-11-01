@@ -378,6 +378,12 @@ func test_generator(levels: int) -> void:
 		check(not b.is_solved(), "poziom %d nie jest ułożony na starcie" % level)
 		check(LevelGenerator.generate(level).board.key() == b.key(), "poziom %d powtarzalny" % level)
 		check(p["mods"].has("folia") == (b.wrapped_count() > 0), "poziom %d: folia tylko gdy włączona" % level)
+		if p["mods"].has("folia"):
+			var nontop := 0
+			for st in b.stacks:
+				nontop += maxi(0, st.size() - 1)
+			check(b.wrapped_count() == int(round(float(p["wrap_fraction"]) * nontop)), "poziom %d: dokładna liczba paczek w folii" % level)
+			check(b.wrapped_count() <= ceili(0.5 * nontop), "poziom %d: w folii najwyżej połowa paczek" % level)
 		check(p["mods"].has("cap5") == (b.capacity == 5), "poziom %d: palety na 5 tylko gdy włączone" % level)
 		check(p["mods"].has("limit") == (g.move_limit > 0), "poziom %d: limit tylko gdy włączony" % level)
 		check(p["mods"].has("chwytaki") == (not b.tools.is_empty()), "poziom %d: chwytaki tylko gdy włączone" % level)

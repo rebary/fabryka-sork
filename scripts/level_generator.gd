@@ -56,8 +56,8 @@ static func params_for_level(level: int) -> Dictionary:
 
 	var t := clampf((level - 16) / 75.0, 0.0, 1.0)
 	p["target"] = lerpf(0.35, 0.75, t)
-	# Folia rośnie wolno: 25% owiniętych paczek po wprowadzeniu -> 80% około zlecenia 150.
-	p["wrap_fraction"] = lerpf(0.25, 0.8, clampf((level - INTRO_LEVEL[MOD_WRAP]) / 110.0, 0.0, 1.0))
+	# Folia rośnie wolno: 12% paczek (nie licząc górnych) po wprowadzeniu -> najwyżej 50% około zlecenia 150.
+	p["wrap_fraction"] = lerpf(0.12, 0.5, clampf((level - INTRO_LEVEL[MOD_WRAP]) / 110.0, 0.0, 1.0))
 	p["limit_slack"] = lerpf(0.6, 0.15, t)
 
 	var mods: Array = []
@@ -97,7 +97,7 @@ static func params_for_level(level: int) -> Dictionary:
 		p["types"] = maxi(5, p["types"] - 1)
 	if p["intro"] != "":
 		p["target"] = 0.3
-		p["wrap_fraction"] = 0.2
+		p["wrap_fraction"] = 0.1
 		p["limit_slack"] = 0.6
 	return p
 
@@ -326,11 +326,22 @@ static func _random_board(rng: RandomNumberGenerator, types: int, cap: int, empt
 	return Board.new(stacks, cap)
 
 
+## Owija folią DOKŁADNIE ustaloną część paczek (bez losowej liczby - tylko losowe miejsca).
+## Górna paczka palety zawsze zostaje widoczna.
 static func _wrap(b: Board, rng: RandomNumberGenerator, fraction: float) -> void:
-	for s in b.stacks:
-		for k in range(s.size() - 1):
-			if rng.randf() < fraction:
-				s[k] = -s[k] - 1
+	var spots: Array = []
+	for i in b.stacks.size():
+		for k in range(b.stacks[i].size() - 1):
+			spots.append([i, k])
+	for i in range(spots.size() - 1, 0, -1):
+		var j := rng.randi_range(0, i)
+		var tmp = spots[i]
+		spots[i] = spots[j]
+		spots[j] = tmp
+	var count := int(round(fraction * spots.size()))
+	for n in count:
+		var sp: Array = spots[n]
+		b.stacks[sp[0]][sp[1]] = -int(b.stacks[sp[0]][sp[1]]) - 1
 
 
 static func _too_easy(board: Board) -> bool:
