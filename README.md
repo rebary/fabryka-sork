@@ -42,6 +42,15 @@ Po uruchomieniu pojawia się **menu główne**:
 - Rangi: Praktykant → Operator (500) → Technik automatyk (1500) → Programista robotów (3500) → Integrator (7000) → Inżynier automatyki (12000) → Główny automatyk (20000). Przy typowej grze awanse wypadają ok. przy zleceniach 10, 23, 46, 86, 143; najwyższa ranga wymaga 3 gwiazdek i programów.
 - Menu → **Ranking**: ranga, pasek postępu, lista rang, statystyki. Wzory i progi: `scripts/score.gd`.
 
+## Pojedynek (gracz kontra gracz – bez serwera)
+- **Walcz z rywalem (liga):** wyścig na identycznej hali z robotem-rywalem (6 rywali od „Śrubki” do „Mistrza”, dobieranych do Twojego wyniku). Odliczanie 3-2-1, stoper, **podgląd palet przeciwnika na żywo**. Bez podpowiedzi, cofanie dozwolone, „Poddaj się” wymaga dwóch naciśnięć.
+- **Liga pojedynków** (osobny ranking): wynik rośnie za wygrane i spada za przegrane (system Elo); ligi Brąz → Srebro (1100) → Złoto (1250) → Platyna (1400) → Diament (1600). Wygrana: +1 gwiazdka do rozbudowy hali (najwyżej 5 dziennie).
+- **Wyzwij znajomego:** po ukończeniu planszy pojedynkowej dostajesz kod (np. `FS-CV4P0-888VW`) z numerem planszy i Twoim wynikiem; znajomy wpisuje go w „Przyjmij wyzwanie”, gra tę samą halę, a jego rywalem jest symulacja Twojego tempa (kończy dokładnie w Twoim czasie). Kod ma sumę kontrolną (literówki są wykrywane). Wyzwania kodem nie zmieniają ligi (kod da się podrobić).
+- Kod: `scripts/duel.gd` (plansze z ziarna, kody, liga, rywale), `scripts/rival.gd` (rywal komputerowy).
+
+## Rankingi
+Dwa rankingi: **ranga za postępy** (kampania + programowanie, z podziałem punktów na tryby) i **liga pojedynków**. Oba widać w menu → Ranking. Ranking online z innymi graczami – po premierze (Google Play Games, patrz `docs/03_PLAN_WDROZENIA.md`).
+
 ## Tryb programowania – krzywa trudności
 | Programy | Produkty | Puste palety | Najkrótszy program |
 |---|---|---|---|

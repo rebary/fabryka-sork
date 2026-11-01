@@ -24,6 +24,7 @@ func _init() -> void:
 	test_intro_levels()
 	test_score()
 	test_program_curve()
+	test_duel()
 	test_programs(30)
 	test_precomputed_data()
 	test_hints_no_loops(45)
@@ -185,6 +186,61 @@ func test_program_curve() -> void:
 			check(pp["types"] >= prev_types, "program %d: liczba produktów nie maleje (poza przerwami)" % n)
 			prev_types = pp["types"]
 		check(pp["slack"] >= 1, "program %d: jest zapas kroków" % n)
+
+
+func test_duel() -> void:
+	# Kody wyzwań: zapis i odczyt, odporność na literówki.
+	var code := Duel.encode(123456, 532, 27)
+	var d := Duel.decode(code)
+	check(d.ok and d.seed == 123456 and d.time_ds == 532 and d.moves == 27, "kod wyzwania: zapis i odczyt (%s)" % code)
+	check(Duel.decode(code.to_lower().replace("-", " ")).ok, "kod działa małymi literami i ze spacjami")
+	var broken := code.substr(0, 4) + ("Z" if code[4] != "Z" else "Y") + code.substr(5)
+	check(not Duel.decode(broken).ok, "literówka w kodzie jest wykrywana")
+	check(not Duel.decode("FS-123").ok, "za krótki kod odrzucony")
+	var edge := Duel.decode(Duel.encode(Duel.MAX_SEED - 1, Duel.MAX_TIME_DS, Duel.MAX_MOVES))
+	check(edge.ok and edge.seed == Duel.MAX_SEED - 1 and edge.moves == Duel.MAX_MOVES, "kod: wartości graniczne")
+	# Plansze z ziarna: powtarzalne i rozwiązywalne.
+	for seed in [0, 1, 2, 777, 54321, Duel.MAX_SEED - 1]:
+		var b := Duel.board_for_seed(seed)
+		check(b.key() == Duel.board_for_seed(seed).key(), "pojedynek: ta sama plansza dla ziarna %d" % seed)
+		check(Solver.solve(b).ok and not b.is_solved(), "pojedynek: plansza %d rozwiązywalna" % seed)
+		check(b.stacks.size() - 2 == Duel.types_for_seed(seed), "pojedynek: liczba produktów z ziarna %d" % seed)
+	# Liga.
+	check(Duel.new_rating(1000, 1000, true) > 1000 and Duel.new_rating(1000, 1000, false) < 1000, "wygrana podnosi, przegrana obniża wynik")
+	check(Duel.new_rating(1000, 1400, true) - 1000 > Duel.new_rating(1000, 800, true) - 1000, "wygrana z silniejszym daje więcej")
+	check(Duel.league_for(1000)["name"] == "Brąz" and Duel.league_for(1600)["name"] == "Diament", "progi lig")
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 3
+	for lg in 5:
+		var s := Duel.seed_for_league(lg, rng)
+		check(s >= 0 and s < Duel.MAX_SEED and Duel.types_for_seed(s) == 5 + clampi(floori(lg / 2.0), 0, 2), "ziarno pasuje do ligi %d" % lg)
+	# Rywale: zawsze kończą planszę; silniejszy jest szybszy (mniej czasu łącznie).
+	var weak_t := 0.0
+	var strong_t := 0.0
+	for seed in [11, 22, 33]:
+		var b := Duel.board_for_seed(seed)
+		for which in [0, Duel.RIVALS.size() - 1]:
+			var rv := Rival.new(b, Duel.RIVALS[which], seed)
+			var t := 0.0
+			while not rv.done and t < 1200.0:
+				rv.update(0.1)
+				t += 0.1
+			check(rv.done and rv.board.is_solved(), "rywal %s kończy planszę %d" % [Duel.RIVALS[which]["name"], seed])
+			if which == 0:
+				weak_t += t
+			else:
+				strong_t += t
+	# Symulacja tempa znajomego kończy dokładnie w jego czasie.
+	var gb := Duel.board_for_seed(4242)
+	var ghost := Rival.new(gb, {"name": "Znajomy", "rating": 1000}, 4242)
+	ghost.set_exact(Solver.solve_short(gb).moves, 30.0)
+	var gt := 0.0
+	while not ghost.done and gt < 100.0:
+		ghost.update(0.05)
+		gt += 0.05
+	check(ghost.done and absf(gt - 30.0) < 0.2, "symulacja znajomego kończy w jego czasie (%.2f s zamiast 30 s)" % gt)
+	check(strong_t < weak_t, "silniejszy rywal jest szybszy (%.0f s vs %.0f s)" % [strong_t / 3.0, weak_t / 3.0])
+	print("Rywal najsłabszy: średnio %.0f s, najsilniejszy: %.0f s na planszę" % [weak_t / 3.0, strong_t / 3.0])
 
 
 func test_stars() -> void:

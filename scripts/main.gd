@@ -65,6 +65,10 @@ var found_hint_this_level := false
 var hint_planner := HintPlanner.new()
 var hints_used_level := 0  # podpowiedzi użyte na tym poziomie (premia punktowa za grę bez nich)
 var preview := {}  # podgląd programu: {"board", "time", "error"}
+# Pojedynek: {"kind": "ai"/"code"/"create", "seed", "rival": Rival|null, "rival_info",
+#             "target_ds", "target_moves", "time", "countdown", "finished", "surrender"}
+var duel := {}
+const DUEL_COUNTDOWN := 3.0
 const PREVIEW_TIME := 4.0
 const FREE_PREVIEW_PROGRAMS := 3  # w programach 1-3 podgląd jest darmowy (nauka)
 var max_progress := 0
@@ -135,6 +139,9 @@ func _ready() -> void:
 	hud.prog_clear_pressed.connect(_on_prog_clear)
 	hud.prog_start_pressed.connect(_on_prog_start)
 	hud.prog_preview_pressed.connect(_on_prog_preview)
+	hud.duel_ai_pressed.connect(_start_duel_ai)
+	hud.duel_create_pressed.connect(_start_duel_create)
+	hud.duel_code_entered.connect(_start_duel_code)
 	hud.survey_submitted.connect(_on_survey_submitted)
 	hud.survey_opened.connect(func(): Save.feedback_prompted = true)
 	hud.menu_pressed.connect(func(): Feedback.flush())
@@ -204,6 +211,12 @@ func _on_survey_submitted(answers: Dictionary) -> void:
 func _on_next() -> void:
 	hud.hide_win()
 	_maybe_prompt_survey()
+	if mode == "duel":
+		if duel.get("kind", "ai") == "ai":
+			_start_duel_ai()
+		else:
+			hud.show_duel_menu()
+		return
 	if mode == "program":
 		_request("p", prog["number"] + 1)
 	else:
@@ -338,6 +351,8 @@ func _try_move(from: int, to: int) -> bool:
 	var dst_top := _box_rect(to, dst_size + n - 1).position
 	var rec := board.do_move(from, to)
 	var lucky := false
+	if mode == "duel":
+		history.append(rec)
 	if mode == "campaign":
 		history.append(rec)
 		var new_ground := history.size() > max_progress
@@ -399,6 +414,10 @@ func _after_move(to: int) -> void:
 		var r: Rect2 = stack_rects[to]
 		fx.burst(Vector2(r.get_center().x, r.position.y), COL_DONE, 34)
 		Sfx.play("complete")
+	if mode == "duel":
+		if board.is_solved() and not duel.get("finished", true):
+			_on_duel_end(true)
+		return
 	if mode != "campaign":
 		return
 	if board.is_solved():
@@ -449,7 +468,9 @@ func _points_text(pts: int, gained: int, rank_before: Dictionary, rank_after: Di
 
 
 func _on_undo() -> void:
-	if mode != "campaign" or not anim.is_empty() or history.is_empty() or hud.is_modal_open():
+	if not (mode in ["campaign", "duel"]) or not anim.is_empty() or history.is_empty() or hud.is_modal_open():
+		return
+	if mode == "duel" and (duel.get("finished", true) or duel.get("countdown", 0.0) > 0.0):
 		return
 	board.undo(history.pop_back())
 	selected = -1
@@ -677,9 +698,162 @@ func _program_hint() -> void:
 	hud.show_msg("Spróbuj ułożyć program od nowa", 4.0)
 
 
+# ---------------------------------------------------------------- pojedynek
+
+func _begin_duel(kind: String, seed: int, rival: Rival, rival_info: Dictionary, target_ds: int = 0, target_moves: int = 0) -> void:
+	hud.hide_menu()
+	hud.hide_win()
+	mode = "duel"
+	hud.set_mode(mode)
+	board = Duel.board_for_seed(seed)
+	start_board = board.clone()
+	duel = {"kind": kind, "seed": seed, "rival": rival, "rival_info": rival_info, "target_ds": target_ds,
+		"target_moves": target_moves, "time": 0.0, "countdown": DUEL_COUNTDOWN, "finished": false, "surrender": 0.0}
+	hints_used_level = 0
+	_reset_state()
+	hud.transition()
+	Sfx.play("hint")
+
+
+## Pojedynek ligowy z rywalem komputerowym dobranym do wyniku gracza.
+func _start_duel_ai() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var lg := Duel.league_for(Save.duel_rating)
+	var seed := Duel.seed_for_league(lg["index"], rng)
+	var info := Duel.pick_rival(Save.duel_rating, rng)
+	_begin_duel("ai", seed, Rival.new(Duel.board_for_seed(seed), info, seed), info)
+
+
+## Wyzwanie dla znajomego: gracz ustala wynik na losowej planszy, dostaje kod.
+func _start_duel_create() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.randomize()
+	var seed := Duel.seed_for_league(Duel.league_for(Save.duel_rating)["index"], rng)
+	_begin_duel("create", seed, null, {})
+
+
+## Przyjęcie wyzwania z kodu: rywalem jest symulacja tempa znajomego.
+func _start_duel_code(d: Dictionary) -> void:
+	var seed: int = d["seed"]
+	var b := Duel.board_for_seed(seed)
+	var info := {"name": "Znajomy", "model": "tempo z kodu", "rating": 1000}
+	var ghost := Rival.new(b, info, seed)
+	ghost.set_exact(Solver.solve_short(b).moves, d["time_ds"] / 10.0)
+	_begin_duel("code", seed, ghost, info, d["time_ds"], d["moves"])
+
+
+func _duel_title() -> String:
+	match duel.get("kind", ""):
+		"ai":
+			var info: Dictionary = duel["rival_info"]
+			return "Pojedynek: %s" % info.get("name", "rywal")
+		"code":
+			return "Wyzwanie"
+	return "Ustal wynik"
+
+
+func _duel_tick(delta: float) -> void:
+	if duel["finished"]:
+		return
+	if duel["countdown"] > 0.0:
+		var before: int = ceili(duel["countdown"])
+		duel["countdown"] -= delta
+		if ceili(duel["countdown"]) != before:
+			Sfx.play("click" if duel["countdown"] > 0.0 else "complete")
+		return
+	duel["time"] += delta
+	duel["surrender"] = maxf(0.0, duel["surrender"] - delta)
+	var rv = duel["rival"]
+	if rv != null and rv.update(delta) and rv.done:
+		duel["rival_time"] = duel["time"]
+		_on_duel_end(false)
+	_update_hud()
+
+
+func _on_surrender() -> void:
+	if duel.is_empty() or duel["finished"] or duel["countdown"] > 0.0:
+		return
+	if duel["surrender"] > 0.0:
+		_on_duel_end(false, true)
+	else:
+		duel["surrender"] = 3.0
+		hud.show_msg("Naciśnij „Poddaj się” jeszcze raz, aby zakończyć pojedynek", 3.0)
+
+
+func _on_duel_end(player_won: bool, surrendered: bool = false) -> void:
+	if duel["finished"]:
+		return
+	duel["finished"] = true
+	var t: float = duel["time"]
+	var moves := history.size()
+	var kind: String = duel["kind"]
+	var text := ""
+	var code := ""
+	var finished_board := board.is_solved()
+	if finished_board:
+		code = Duel.encode(duel["seed"], int(round(t * 10.0)), moves)
+	match kind:
+		"ai":
+			var info: Dictionary = duel["rival_info"]
+			var before: int = Save.duel_rating
+			var lg_before := Duel.league_for(before)
+			Save.duel_rating = Duel.new_rating(before, int(info["rating"]), player_won)
+			Save.duel_best = maxi(Save.duel_best, Save.duel_rating)
+			if player_won:
+				Save.duel_wins += 1
+			else:
+				Save.duel_losses += 1
+			var lg_after := Duel.league_for(Save.duel_rating)
+			var rv: Rival = duel["rival"]
+			if player_won:
+				text = "Wygrana z rywalem %s!\nTwój czas: %.1f s (%d ruchów)\nRywal miał %d%% palet" % [info["name"], t, moves, int(rv.progress() * 100.0)]
+				var st: int = Save.award_duel_star()
+				if st > 0:
+					text += "\n+%d gwiazdka do rozbudowy hali" % st
+			elif surrendered:
+				text = "Poddałeś pojedynek z rywalem %s." % info["name"]
+			else:
+				text = "Przegrana. %s skończył w %.1f s.\nTy: %d ruchów, %.1f s" % [info["name"], t, moves, t]
+			var delta := Save.duel_rating - before
+			text += "\nLiga %s: %d (%s%d)" % [lg_after["name"], Save.duel_rating, "+" if delta >= 0 else "", delta]
+			if lg_after["index"] > lg_before["index"]:
+				text += "\nAWANS do ligi %s!" % lg_after["name"]
+				fx.confetti(get_viewport_rect().size.x)
+			if code != "":
+				text += "\n\nWyzwij znajomego na tej hali:"
+		"code":
+			var target_s: float = duel["target_ds"] / 10.0
+			if finished_board:
+				var win := int(round(t * 10.0)) < int(duel["target_ds"]) or (int(round(t * 10.0)) == int(duel["target_ds"]) and moves < int(duel["target_moves"]))
+				text = ("Wygrywasz wyzwanie!" if win else "Znajomy był szybszy.") + "\nTy: %.1f s (%d ruchów)\nZnajomy: %.1f s (%d ruchów)" % [t, moves, target_s, duel["target_moves"]]
+				text += "\n\nOdeślij znajomemu swój kod:"
+				player_won = win
+			else:
+				text = "Znajomy był szybszy: %.1f s (%d ruchów).\nSpróbuj jeszcze raz z tym samym kodem." % [target_s, duel["target_moves"]]
+		"create":
+			if finished_board:
+				text = "Twój wynik: %.1f s, %d ruchów.\nWyślij znajomemu kod – zagra tę samą halę:" % [t, moves]
+				player_won = true
+			else:
+				text = "Wyzwanie przerwane."
+	Save.save()
+	if player_won:
+		fx.confetti(get_viewport_rect().size.x)
+		Sfx.play("win")
+	else:
+		Sfx.play("error")
+	_update_hud()
+	await get_tree().create_timer(0.7).timeout
+	hud.show_win(text, 0, "Następny pojedynek" if kind == "ai" else "Pojedynek – menu", code)
+
+
 # ---------------------------------------------------------------- podpowiedzi i sklep
 
 func _on_hint() -> void:
+	if mode == "duel":
+		_on_surrender()
+		return
 	if not anim.is_empty() or board == null or hud.is_modal_open():
 		return
 	if mode == "program" and prog_state != "edit":
@@ -810,6 +984,9 @@ func _on_sound_toggled() -> void:
 func _update_hud() -> void:
 	if board == null:
 		return
+	if mode == "duel":
+		hud.set_duel_status(_duel_title(), duel.get("time", 0.0), history.size(), "")
+		return
 	if mode == "program":
 		hud.set_program_status(prog["number"], program, prog["max_steps"], prog["optimal"],
 			prog_index if prog_state == "run" else -1, prog_error, prog_state, Save.wallet.hints)
@@ -830,6 +1007,8 @@ func _on_tap(pos: Vector2) -> void:
 		return
 	if mode == "program":
 		_on_tap_program(pos)
+		return
+	if mode == "duel" and (duel.get("countdown", 0.0) > 0.0 or duel.get("finished", true)):
 		return
 	var i := _stack_at(pos)
 	hint = {}
@@ -925,6 +1104,8 @@ func _process(delta: float) -> void:
 			_after_move(to)
 	if mode == "program":
 		_program_tick(delta)
+	if mode == "duel" and not duel.is_empty():
+		_duel_tick(delta)
 	if not preview.is_empty():
 		preview["time"] -= delta
 		if preview["time"] <= 0.0:
@@ -963,7 +1144,7 @@ func _layout() -> void:
 	var margin := 26.0
 	var gap := 20.0
 	var col_w := minf(128.0, (vs.x - 2.0 * margin - gap * (per_row - 1)) / per_row)
-	rail_y = 292.0 if mode == "program" else 196.0
+	rail_y = 292.0 if mode in ["program", "duel"] else 196.0
 	var top := rail_y + 54.0
 	var bottom := vs.y - (262.0 if not board.tools.is_empty() else 200.0)
 	var row_gap := 64.0
@@ -998,10 +1179,60 @@ func _draw() -> void:
 		for i in board.stacks.size():
 			_draw_stack(i)
 	_draw_robot()
+	if mode == "duel" and not duel.is_empty():
+		_draw_duel_overlay(vs)
 	if not preview.is_empty() and not stack_rects.is_empty():
 		var r0: Rect2 = stack_rects[0]
 		var a := 0.6 + 0.4 * sin(time * 6.0)
 		draw_string(ThemeDB.fallback_font, Vector2(0, r0.position.y - 34), "PODGLĄD PROGRAMU", HORIZONTAL_ALIGNMENT_CENTER, vs.x, 30, Color(0.31, 0.82, 1.0, a))
+
+
+## Podgląd ekranu przeciwnika (małe palety na żywo) i odliczanie startu.
+func _draw_duel_overlay(vs: Vector2) -> void:
+	var font := ThemeDB.fallback_font
+	var rv = duel["rival"]
+	var panel := Rect2(vs.x - 330, 118, 310, 122)
+	if rv != null:
+		draw_rect(panel, Color(0.05, 0.06, 0.08, 0.85))
+		draw_rect(panel, Color("#ff6b6b") if not rv.done else COL_DONE, false, 2.0)
+		var info: Dictionary = duel["rival_info"]
+		var name_txt := "%s (%s)" % [info.get("name", ""), info.get("model", "")]
+		draw_string(font, panel.position + Vector2(10, 22), name_txt, HORIZONTAL_ALIGNMENT_LEFT, 200, 18, Color("#ffb3b3"))
+		var status := "GOTOWE" if rv.done else "palety %d%%" % int(rv.progress() * 100.0)
+		draw_string(font, panel.position + Vector2(10, 22), status, HORIZONTAL_ALIGNMENT_RIGHT, panel.size.x - 20, 18, COL_DONE if rv.done else Color("#c8d0da"))
+		var rb: Board = rv.board
+		var n := rb.stacks.size()
+		var col_w := (panel.size.x - 20) / n
+		var bh := 18.0
+		for i in n:
+			var x := panel.position.x + 10 + i * col_w
+			var base_y := panel.end.y - 10
+			draw_rect(Rect2(x + 2, base_y, col_w - 4, 3), COL_PALLET)
+			var st: Array = rb.stacks[i]
+			for k in st.size():
+				var v: int = st[k]
+				var c: Color = PRODUCT_COLORS[Board.type_of(v) % PRODUCT_COLORS.size()] if v >= 0 else Color("#b9c4d0")
+				draw_rect(Rect2(x + 3, base_y - (k + 1) * bh, col_w - 6, bh - 2), c)
+			if rb.is_stack_complete(i):
+				draw_rect(Rect2(x + 1, base_y - rb.capacity * bh - 2, col_w - 2, rb.capacity * bh + 4), COL_DONE, false, 2.0)
+		if duel["kind"] == "code":
+			draw_string(font, Vector2(panel.position.x, panel.end.y + 18), "symulacja tempa znajomego", HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 15, Color("#9aa5b1"))
+	else:
+		var target := "Ustal wynik do pobicia – czas biegnie"
+		draw_string(font, Vector2(panel.position.x, panel.position.y + 60), target, HORIZONTAL_ALIGNMENT_CENTER, panel.size.x, 18, Color("#c8d0da"))
+	# Duży stoper po lewej, pod tytułem.
+	var big := "%.1f s" % duel["time"]
+	draw_string(Look.bold, Vector2(24, 196), big, HORIZONTAL_ALIGNMENT_LEFT, -1, 54, Color.WHITE)
+	if duel["kind"] == "code":
+		draw_string(font, Vector2(26, 228), "cel: %.1f s" % (duel["target_ds"] / 10.0), HORIZONTAL_ALIGNMENT_LEFT, -1, 20, Color("#ffd23f"))
+	if duel["countdown"] > 0.0:
+		var n_txt := str(ceili(duel["countdown"]))
+		var a := fmod(duel["countdown"], 1.0)
+		draw_rect(Rect2(Vector2.ZERO, vs), Color(0, 0, 0, 0.35))
+		draw_string_outline(font, Vector2(0, vs.y * 0.45), n_txt, HORIZONTAL_ALIGNMENT_CENTER, vs.x, int(140 + 60 * a), 12, Color(0, 0, 0, 0.8))
+		draw_string(font, Vector2(0, vs.y * 0.45), n_txt, HORIZONTAL_ALIGNMENT_CENTER, vs.x, int(140 + 60 * a), Color("#ffd23f"))
+	elif duel["time"] < 0.8:
+		draw_string(font, Vector2(0, vs.y * 0.45), "START!", HORIZONTAL_ALIGNMENT_CENTER, vs.x, 110, Color(0.24, 0.86, 0.52, 1.0 - duel["time"] / 0.8))
 
 
 func _draw_hall(vs: Vector2) -> void:

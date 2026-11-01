@@ -20,6 +20,9 @@ signal prog_delete_pressed
 signal prog_clear_pressed
 signal prog_start_pressed
 signal prog_preview_pressed
+signal duel_ai_pressed
+signal duel_create_pressed
+signal duel_code_entered(data: Dictionary)
 signal fx_toggled
 signal survey_submitted(answers: Dictionary)
 signal survey_opened
@@ -76,6 +79,16 @@ var btn_menu_decor: Button
 var btn_menu_sound: Button
 var btn_menu_fx: Button
 var btn_menu_rank: Button
+var btn_menu_duel: Button
+var duel_layer: Control
+var lbl_duel_league: Label
+var lbl_duel_info: Label
+var code_layer: Control
+var code_edit: LineEdit
+var lbl_code_err: Label
+var win_code_row: HBoxContainer
+var win_code_edit: LineEdit
+var lbl_rank_duel: Label
 var rank_layer: Control
 var lbl_rank_name: Label
 var lbl_rank_points: Label
@@ -196,6 +209,8 @@ func _ready() -> void:
 	_build_menu()
 	_build_survey()
 	_build_ranking()
+	_build_duel_menu()
+	_build_code_entry()
 	_build_survey_prompt()
 	_build_busy()
 	# Przejście między poziomami (krótkie wygaszenie).
@@ -226,7 +241,7 @@ func set_mode(mode: String) -> void:
 	bar_campaign.visible = not program_mode
 	bar_program.visible = program_mode
 	prog_chips.visible = program_mode
-	lbl_msg.offset_top = 216 if program_mode else 128
+	lbl_msg.offset_top = 216 if program_mode else (248 if mode == "duel" else 128)
 	if program_mode:
 		bar_tools.visible = false
 
@@ -244,6 +259,16 @@ func set_status(level: int, moves: int, limit: int, mods: Array, hints: int) -> 
 		b.append(MOD_NAMES.get(m, m))
 	lbl_badges.text = "  •  ".join(b)
 	_set_hint_text(btn_hint, hints)
+
+
+## Pasek informacji w pojedynku: czas, ruchy, rywal. Przycisk podpowiedzi = "Poddaj się".
+func set_duel_status(title: String, seconds: float, moves: int, rival_label: String) -> void:
+	lbl_title.text = title
+	lbl_info.text = "Czas: %.1f s  •  Ruchy: %d" % [seconds, moves]
+	lbl_info.add_theme_color_override("font_color", COL_MUTED)
+	lbl_badges.text = ""
+	btn_hint.text = "Poddaj się"
+	bar_tools.visible = false
 
 
 func set_tools(tools: Array, current: int) -> void:
@@ -307,9 +332,12 @@ func show_msg(text: String, seconds: float = 3.0) -> void:
 	msg_timer = seconds
 
 
-func show_win(text: String, stars: int, next_label: String) -> void:
+func show_win(text: String, stars: int, next_label: String, code: String = "") -> void:
 	lbl_win.text = text
+	win_stars.visible = stars > 0
 	win_stars.set_stars(stars, true)
+	win_code_row.visible = code != ""
+	win_code_edit.text = code
 	btn_win_next.text = next_label
 	win_layer.visible = true
 	win_layer.modulate.a = 0.0
@@ -352,6 +380,7 @@ func show_menu() -> void:
 	btn_menu_campaign.text = "Kampania – zlecenie %d" % Save.level
 	btn_menu_program.text = "Programowanie robota – program %d" % Save.program
 	btn_menu_decor.text = "Rozbudowa hali – %d" % Save.stars_available()
+	btn_menu_duel.text = "Pojedynek – liga %s (%d)" % [Duel.league_for(Save.duel_rating)["name"], Save.duel_rating]
 	var rk := Score.rank_for(Save.total_points())
 	btn_menu_rank.text = "Ranking – %s (%d pkt)" % [rk["name"], Save.total_points()]
 	btn_menu_sound.text = "Dźwięk: wł." if Save.sound_on else "Dźwięk: wył."
@@ -381,7 +410,7 @@ func show_decor() -> void:
 
 
 func is_modal_open() -> bool:
-	for l in [win_layer, shop_layer, intro_layer, busy_layer, level_layer, menu_layer, decor_layer, survey_layer, prompt_layer, rank_layer]:
+	for l in [win_layer, shop_layer, intro_layer, busy_layer, level_layer, menu_layer, decor_layer, survey_layer, prompt_layer, rank_layer, duel_layer, code_layer]:
 		if l.visible:
 			return true
 	return false
@@ -401,6 +430,22 @@ func _build_win() -> void:
 	v.add_child(lbl_win)
 	win_stars = StarRow.new(64)
 	v.add_child(win_stars)
+	win_code_row = HBoxContainer.new()
+	win_code_row.add_theme_constant_override("separation", 10)
+	win_code_edit = LineEdit.new()
+	win_code_edit.editable = false
+	win_code_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	win_code_edit.custom_minimum_size = Vector2(330, 80)
+	win_code_edit.add_theme_font_size_override("font_size", 30)
+	win_code_row.add_child(win_code_edit)
+	var copy := _button("Kopiuj", func():
+		DisplayServer.clipboard_set(win_code_edit.text)
+		show_msg("Skopiowano kod – wyślij go znajomemu", 3.0), 22)
+	copy.custom_minimum_size = Vector2(160, 80)
+	copy.size_flags_horizontal = Control.SIZE_FILL
+	win_code_row.add_child(copy)
+	win_code_row.visible = false
+	v.add_child(win_code_row)
 	btn_win_next = _button("Dalej", func(): next_pressed.emit())
 	btn_win_next.custom_minimum_size = Vector2(460, 110)
 	btn_win_next.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), COL_GREEN, 3))
@@ -527,6 +572,9 @@ func _build_menu() -> void:
 	btn_menu_program = _menu_button(func(): program_mode_pressed.emit())
 	btn_menu_program.add_theme_stylebox_override("normal", _box(Color("#1f4a5c"), Color("#4fd1ff"), 3))
 	v.add_child(btn_menu_program)
+	btn_menu_duel = _menu_button(func(): show_duel_menu())
+	btn_menu_duel.add_theme_stylebox_override("normal", _box(Color("#5c1f24"), Color("#ff6b6b"), 3))
+	v.add_child(btn_menu_duel)
 	btn_menu_decor = _menu_button(func(): show_decor())
 	btn_menu_decor.icon = star_icon
 	btn_menu_decor.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -639,6 +687,110 @@ func refresh_decor() -> void:
 			decor_list.add_child(b)
 
 
+# ---------------------------------------------------------------- pojedynek
+
+func show_duel_menu() -> void:
+	var lg := Duel.league_for(Save.duel_rating)
+	lbl_duel_league.text = "Liga: %s  (%d)" % [lg["name"], Save.duel_rating]
+	var next := ""
+	if lg["next_min"] > 0:
+		next = "\nDo ligi „%s”: %d" % [lg["next_name"], int(lg["next_min"]) - Save.duel_rating]
+	lbl_duel_info.text = "Wygrane: %d  •  Przegrane: %d%s" % [Save.duel_wins, Save.duel_losses, next]
+	menu_layer.visible = false
+	duel_layer.move_to_front()
+	duel_layer.visible = true
+
+
+func _build_duel_menu() -> void:
+	duel_layer = _overlay()
+	(duel_layer as ColorRect).color = Color(0.06, 0.07, 0.09, 0.94)
+	var v := _vbox(_panel(duel_layer))
+	v.add_child(_title("Pojedynek"))
+	lbl_duel_league = _label(32, Color("#ff8f8f"))
+	lbl_duel_league.add_theme_font_override("font", Look.bold)
+	lbl_duel_league.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(lbl_duel_league)
+	lbl_duel_info = _label(22, COL_MUTED)
+	lbl_duel_info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(lbl_duel_info)
+	var ai := _menu_button(func():
+		duel_layer.visible = false
+		duel_ai_pressed.emit())
+	ai.text = "Walcz z rywalem (liga)"
+	ai.add_theme_stylebox_override("normal", _box(Color("#5c1f24"), Color("#ff6b6b"), 3))
+	v.add_child(ai)
+	var create := _menu_button(func():
+		duel_layer.visible = false
+		duel_create_pressed.emit())
+	create.text = "Wyzwij znajomego (utwórz kod)"
+	v.add_child(create)
+	var accept := _menu_button(func():
+		duel_layer.visible = false
+		show_code_entry())
+	accept.text = "Przyjmij wyzwanie (wpisz kod)"
+	v.add_child(accept)
+	var info := _label(19, COL_MUTED)
+	info.text = "Ta sama hala dla obu graczy – wygrywa szybszy. Bez podpowiedzi, cofanie dozwolone. Wygrana z rywalem: +1 gwiazdka (najwyżej 5 dziennie). Wyzwania kodem nie zmieniają ligi."
+	info.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	info.custom_minimum_size = Vector2(540, 0)
+	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(info)
+	var close := _button("Zamknij", func():
+		duel_layer.visible = false
+		show_menu())
+	close.custom_minimum_size = Vector2(560, 90)
+	v.add_child(close)
+
+
+func show_code_entry() -> void:
+	code_edit.text = ""
+	lbl_code_err.text = ""
+	code_layer.move_to_front()
+	code_layer.visible = true
+	code_edit.grab_focus()
+
+
+func _build_code_entry() -> void:
+	code_layer = _overlay()
+	var v := _vbox(_panel(code_layer))
+	v.add_child(_title("Przyjmij wyzwanie"))
+	var t := _label(22, COL_MUTED)
+	t.text = "Wpisz kod od znajomego, np. FS-7K2QM-41BXD"
+	t.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(t)
+	code_edit = LineEdit.new()
+	code_edit.custom_minimum_size = Vector2(460, 96)
+	code_edit.alignment = HORIZONTAL_ALIGNMENT_CENTER
+	code_edit.max_length = 20
+	code_edit.placeholder_text = "FS-XXXXX-XXXXX"
+	code_edit.add_theme_font_size_override("font_size", 36)
+	code_edit.text_submitted.connect(func(_x): _confirm_code())
+	v.add_child(code_edit)
+	lbl_code_err = _label(22, COL_RED)
+	lbl_code_err.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl_code_err.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	lbl_code_err.custom_minimum_size = Vector2(460, 0)
+	v.add_child(lbl_code_err)
+	var ok := _button("Zatwierdź", func(): _confirm_code())
+	ok.custom_minimum_size = Vector2(460, 100)
+	ok.add_theme_stylebox_override("normal", _box(Color("#2b6e3f"), COL_GREEN, 3))
+	v.add_child(ok)
+	var cancel := _button("Anuluj", func():
+		code_layer.visible = false
+		show_duel_menu())
+	cancel.custom_minimum_size = Vector2(460, 90)
+	v.add_child(cancel)
+
+
+func _confirm_code() -> void:
+	var d := Duel.decode(code_edit.text)
+	if not d.ok:
+		lbl_code_err.text = d["error"]
+		return
+	code_layer.visible = false
+	duel_code_entered.emit(d)
+
+
 # ---------------------------------------------------------------- ranking
 
 func show_ranking() -> void:
@@ -663,6 +815,8 @@ func show_ranking() -> void:
 		rank_list.add_child(l)
 	lbl_rank_stats.text = "Ukończone zlecenia: %d (%d pkt)\nUkończone programy: %d (%d pkt)\nGwiazdki: %d" % [
 		Save.stars.size(), Save.points_of("c"), Save.program_stars.size(), Save.points_of("p"), Save.total_stars()]
+	var lg := Duel.league_for(Save.duel_rating)
+	lbl_rank_duel.text = "Liga pojedynków: %s – %d (rekord %d)\nWygrane: %d  •  Przegrane: %d" % [lg["name"], Save.duel_rating, Save.duel_best, Save.duel_wins, Save.duel_losses]
 	menu_layer.visible = false
 	rank_layer.move_to_front()
 	rank_layer.visible = true
@@ -672,7 +826,7 @@ func _build_ranking() -> void:
 	rank_layer = _overlay()
 	var v := _vbox(_panel(rank_layer))
 	v.add_theme_constant_override("separation", 12)
-	v.add_child(_title("Ranking"))
+	v.add_child(_title("Ranga za postępy"))
 	lbl_rank_name = _label(40, COL_ACCENT)
 	lbl_rank_name.add_theme_font_override("font", Look.bold)
 	lbl_rank_name.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -695,6 +849,9 @@ func _build_ranking() -> void:
 	lbl_rank_stats = _label(22, COL_TEXT)
 	lbl_rank_stats.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	v.add_child(lbl_rank_stats)
+	lbl_rank_duel = _label(24, Color("#ff8f8f"))
+	lbl_rank_duel.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	v.add_child(lbl_rank_duel)
 	var info := _label(18, COL_MUTED)
 	info.text = "Punkty: trudność poziomu × gwiazdki (+20% bez podpowiedzi).\nLiczy się najlepszy wynik każdego poziomu."
 	info.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

@@ -22,6 +22,12 @@ var feedback_pending: Array = []  # ankiety czekające na wysłanie (np. brak in
 var feedback_sent: int = 0
 var feedback_prompted: bool = false
 var points: Dictionary = {}  # "c12" / "p5" -> najlepsze punkty za zlecenie / program
+var duel_rating: int = 1000  # wynik ligi pojedynków
+var duel_best: int = 1000
+var duel_wins: int = 0
+var duel_losses: int = 0
+var duel_star_day: String = ""
+var duel_stars_today: int = 0
 
 
 func _ready() -> void:
@@ -55,6 +61,12 @@ func load_data() -> void:
 	feedback_sent = int(cfg.get_value("feedback", "sent", 0))
 	feedback_prompted = bool(cfg.get_value("feedback", "prompted", false))
 	points = cfg.get_value("progress", "points", {})
+	duel_rating = int(cfg.get_value("duel", "rating", 1000))
+	duel_best = int(cfg.get_value("duel", "best", 1000))
+	duel_wins = int(cfg.get_value("duel", "wins", 0))
+	duel_losses = int(cfg.get_value("duel", "losses", 0))
+	duel_star_day = str(cfg.get_value("duel", "star_day", ""))
+	duel_stars_today = int(cfg.get_value("duel", "stars_today", 0))
 
 
 func save() -> void:
@@ -77,6 +89,12 @@ func save() -> void:
 	cfg.set_value("feedback", "sent", feedback_sent)
 	cfg.set_value("feedback", "prompted", feedback_prompted)
 	cfg.set_value("progress", "points", points)
+	cfg.set_value("duel", "rating", duel_rating)
+	cfg.set_value("duel", "best", duel_best)
+	cfg.set_value("duel", "wins", duel_wins)
+	cfg.set_value("duel", "losses", duel_losses)
+	cfg.set_value("duel", "star_day", duel_star_day)
+	cfg.set_value("duel", "stars_today", duel_stars_today)
 	cfg.save(PATH)
 
 
@@ -146,3 +164,16 @@ func points_of(prefix: String) -> int:
 		if str(k).begins_with(prefix):
 			n += int(points[k])
 	return n
+
+
+## Gwiazdka za wygrany pojedynek (najwyżej Duel.MAX_STARS_PER_DAY dziennie). Zwraca liczbę przyznanych.
+func award_duel_star() -> int:
+	var today := Time.get_date_string_from_system()
+	if duel_star_day != today:
+		duel_star_day = today
+		duel_stars_today = 0
+	if duel_stars_today >= Duel.MAX_STARS_PER_DAY:
+		return 0
+	duel_stars_today += Duel.STARS_PER_WIN
+	stars_spent -= Duel.STARS_PER_WIN  # gwiazdki z pojedynków zwiększają pulę do wydania
+	return Duel.STARS_PER_WIN
