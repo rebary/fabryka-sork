@@ -3,6 +3,7 @@
 *.aab
 *.keystore
 export_presets.cfg
-build/
+build/*
+!build/store/
 FabrykaSort.html
 FabrykaSort_dla_mnie.html

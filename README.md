@@ -14,6 +14,9 @@ Nazwa jest robocza. Przed publikacją sprawdź, czy nie jest zajęta w Google Pl
 - `docs/02_PUBLIKACJA_GOOGLE_PLAY.md` – jak tanio opublikować grę w Google Play
 - `docs/03_PLAN_WDROZENIA.md` – etapy od testów do premiery, kryteria decyzji, ryzyka
 - `docs/04_KAMPANIA_MARKETINGOWA.md` – pozycjonowanie, teksty do sklepu, kanały, kalendarz
+- `docs/08_KARTA_SKLEPU.md` – teksty do Google Play (PL/EN), lista materiałów, odpowiedzi do formularzy
+- `docs/privacy/index.html` – polityka prywatności (PL/EN) do opublikowania
+- `build/store/` – ikona, grafika promocyjna, zrzuty z podpisami (PL/EN), film 27 s
 - `docs/07_START_TESTOW.md` – **lista kroków do startu testów z graczami** (wiadomość do testerów, decyzje po tygodniu)
 - `docs/06_HIERARCHIA_UTRUDNIEN.md` – pomiar wpływu utrudnień i ich kolejność (`tools/analyze_modifiers.gd`)
 - `docs/05_ANKIETA_I_ANALIZA.md` – ankieta w grze, arkusz Google z automatyczną analizą (`docs/ankieta/Code.gs`)

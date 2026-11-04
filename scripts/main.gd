@@ -207,7 +207,7 @@ func _on_survey_submitted(answers: Dictionary) -> void:
 	Sfx.play("reward")
 	hud.show_menu()
 	var where := "Wysyłamy ją do twórcy." if Feedback.endpoint != "" else "Zapisaliśmy ją na telefonie – zostanie wysłana, gdy ankiety zostaną włączone."
-	hud.show_intro("Dziękujemy!", "Twoja opinia jest dla nas bardzo ważna.\n" + where)
+	hud.show_intro("Dziękujemy!", "Twoja opinia jest dla nas bardzo ważna.\n" + where + "\n\nIdentyfikator instalacji (do ewentualnego usunięcia odpowiedzi): " + Save.install_id)
 
 
 func _on_next() -> void:
