@@ -17,7 +17,7 @@ godot --headless --export-debug "Web" build/web/index.html
 ```bash
 python3 tools/build_single_html.py build/web FabrykaSort.html
 ```
-Do eksportu potrzebne są szablony eksportu Godota 4.7.2 (Editor → Manage Export Templates) i preset „Web” (Project → Export → Add… → Web, bez obsługi wątków – „Thread Support” wyłączone).
+Do eksportu potrzebne są szablony eksportu Godota 4.7.2 (Editor → Manage Export Templates) i preset „Web” (Project → Export → Add… → Web, bez obsługi wątków – „Thread Support” wyłączone). W zakładce **Resources → Filters to exclude** wpisz `docs/*, tools/*, tests/*, build/*, *.mp4`, żeby do gry nie trafiły materiały do sklepu.
 
 ---
 

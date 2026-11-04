@@ -7,3 +7,4 @@ build/*
 !build/store/
 FabrykaSort.html
 FabrykaSort_dla_mnie.html
+build/store/raw_*
