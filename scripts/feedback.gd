@@ -7,7 +7,7 @@ extends Node
 ## KONFIGURACJA: wklej adres wdrożonego skryptu (kończy się na /exec) i ten sam klucz,
 ## który ustawisz w Code.gs. Pusty adres = ankiety zapisują się tylko w kolejce na telefonie.
 
-const ENDPOINT_URL := "https://script.google.com/macros/s/AKfycbw5i4KYFQxEYM9U_GzQPqJITxjEc-Nuo6F0qUSqVKih_Ivid7P5esU0H1YB7kjqOLJu/exec"
+const ENDPOINT_URL := "https://script.google.com/macros/s/AKfycbzv64oyjRut1owh81LIPvXLhTmqtjS4Rvr8PMKDg3b5CiG_oT0VlsebYHeI57g5Ze4N/exec"
 const SHARED_KEY := "ZMIEN_MNIE"
 const SCHEMA := 1
 
